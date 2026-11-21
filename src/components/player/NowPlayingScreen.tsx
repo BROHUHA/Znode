@@ -28,6 +28,7 @@ import {
   Plus,
   Radio,
   RotateCw,
+  Moon,
 } from 'lucide-react';
 import { usePlayerStore } from '../../stores/playerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -50,6 +51,7 @@ interface NowPlayingScreenProps {
   onOpenListenTogether?: () => void;
   onOpenEqualizer?: () => void;
   onOpenSettings?: () => void;
+  onOpenSleepTimer?: () => void;
 }
 
 const DOWNLOADS_KEY = 'znode_music_downloads';
@@ -96,6 +98,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   onOpenListenTogether,
   onOpenEqualizer,
   onOpenSettings,
+  onOpenSleepTimer,
 }) => {
   const {
     currentSong,
@@ -130,6 +133,9 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
     refreshRelatedQueue,
     setCurrentPalette,
     currentPalette,
+    sleepTimerEndTime,
+    sleepTimerEndOfTrack,
+    sleepTimerRemainingSeconds,
   } = usePlayerStore();
 
   const { audioQuality, setAudioQuality } = useSettingsStore();
@@ -833,7 +839,29 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               </p>
             </div>
 
-            <div className="w-9 h-9 pointer-events-none" />
+              {/* Sleep Timer icon in header */}
+              {onOpenSleepTimer ? (
+                <button
+                  onClick={onOpenSleepTimer}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+                    sleepTimerEndTime || sleepTimerEndOfTrack
+                      ? 'bg-accent-red/20 text-accent-red border border-accent-red/40 shadow-[0_0_12px_rgba(250,45,72,0.3)] animate-pulse'
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
+                  }`}
+                  title={
+                    sleepTimerEndOfTrack
+                      ? 'Sleep timer: End of track'
+                      : sleepTimerEndTime
+                      ? `Sleep timer: ${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`
+                      : 'Sleep Timer'
+                  }
+                  aria-label="Sleep Timer"
+                >
+                  <Moon className={`w-4.5 h-4.5 ${sleepTimerEndTime || sleepTimerEndOfTrack ? 'fill-accent-red' : ''}`} />
+                </button>
+              ) : (
+                <div className="w-9 h-9 pointer-events-none" />
+              )}
           </div>
         )}
 
@@ -1662,6 +1690,26 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               >
                 <Music2 className="w-4 h-4 text-accent-red" />
                 <span>View Artist ({currentSong.artist})</span>
+              </button>
+            )}
+
+            {onOpenSleepTimer && (
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  onOpenSleepTimer();
+                }}
+                className="flex items-center justify-between p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <Moon className="w-4 h-4 text-accent-red" />
+                  <span>Sleep Timer</span>
+                </div>
+                {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
+                    {sleepTimerEndOfTrack ? 'End of track' : `${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`}
+                  </span>
+                )}
               </button>
             )}
 

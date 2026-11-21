@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { DesktopSidebar, NavTab } from './DesktopSidebar';
 import { GlassNavBar } from './GlassNavBar';
 import { FrostedTopBar } from './FrostedTopBar';
@@ -14,7 +15,9 @@ import { SettingsModal } from '../common/SettingsModal';
 import { ListenTogetherModal } from '../common/ListenTogetherModal';
 import { AccountModal } from '../common/AccountModal';
 import { KeyboardShortcutsModal } from '../common/KeyboardShortcutsModal';
+import { SleepTimerModal } from '../common/SleepTimerModal';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useUniversalBackNavigation } from '../../hooks/useUniversalBackNavigation';
 import { BrowseTarget } from '../../types';
 import { usePlayerStore } from '../../stores/playerStore';
 import { useSearchStore } from '../../stores/searchStore';
@@ -34,6 +37,29 @@ export const AppShell: React.FC = () => {
   const [showListenTogether, setShowListenTogether] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showSleepTimer, setShowSleepTimer] = useState(false);
+
+  // Universal Mobile Back Gestures & Browser History Stack Manager
+  const { goBack, isSwipingEdge, edgeSwipeProgress, exitToastVisible } = useUniversalBackNavigation({
+    currentTab,
+    setCurrentTab,
+    selectedBrowse,
+    setSelectedBrowse,
+    modals: {
+      showSettings,
+      setShowSettings,
+      showEqualizer,
+      setShowEqualizer,
+      showListenTogether,
+      setShowListenTogether,
+      showAccountModal,
+      setShowAccountModal,
+      showShortcutsModal,
+      setShowShortcutsModal,
+      showSleepTimer,
+      setShowSleepTimer,
+    },
+  });
 
   // Dynamic blurred artwork background state (100% accurate song artwork color theme)
   const currentArtwork = currentSong?.thumbnailUrl
@@ -185,9 +211,11 @@ export const AppShell: React.FC = () => {
         onOpenSettings={() => setShowSettings(true)}
         onOpenEqualizer={() => setShowEqualizer(true)}
         onOpenListenTogether={() => setShowListenTogether(true)}
+        onOpenSleepTimer={() => setShowSleepTimer(true)}
         isSettingsOpen={showSettings}
         isEqualizerOpen={showEqualizer}
         isListenTogetherOpen={showListenTogether}
+        isSleepTimerOpen={showSleepTimer}
       />
 
       {/* 2. Main Content Feed (Center) */}
@@ -215,7 +243,7 @@ export const AppShell: React.FC = () => {
               initialSubtitle={selectedBrowse.subtitle}
               initialThumbnailUrl={selectedBrowse.thumbnailUrl}
               initialType={selectedBrowse.type}
-              onBack={() => setSelectedBrowse(null)}
+              onBack={goBack}
               onOpenDetail={handleOpenDetail}
               onTitleLoaded={(title) => {
                 setSelectedBrowse((prev) => (prev ? { ...prev, title } : null));
@@ -247,11 +275,12 @@ export const AppShell: React.FC = () => {
           title={getTitle()}
           isSearch={currentTab === 'search' && !selectedBrowse}
           scrolled={isScrolled}
-          onBack={selectedBrowse ? () => setSelectedBrowse(null) : undefined}
+          onBack={selectedBrowse ? goBack : undefined}
           className="absolute top-0 left-0 right-0 z-30"
           onOpenSettings={() => setShowSettings(true)}
           onOpenEqualizer={() => setShowEqualizer(true)}
           onOpenListenTogether={() => setShowListenTogether(true)}
+          onOpenSleepTimer={() => setShowSleepTimer(true)}
           onOpenAccount={() => setShowAccountModal(true)}
           onOpenDetail={handleOpenDetail}
         />
@@ -280,6 +309,7 @@ export const AppShell: React.FC = () => {
         onOpenListenTogether={() => setShowListenTogether(true)}
         onOpenEqualizer={() => setShowEqualizer(true)}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenSleepTimer={() => setShowSleepTimer(true)}
       />
 
       {/* 4. Full-screen gesture-driven Now Playing overlay on Mobile */}
@@ -289,6 +319,7 @@ export const AppShell: React.FC = () => {
         onOpenListenTogether={() => setShowListenTogether(true)}
         onOpenEqualizer={() => setShowEqualizer(true)}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenSleepTimer={() => setShowSleepTimer(true)}
       />
 
       {/* Modals & Dialogs */}
@@ -298,13 +329,40 @@ export const AppShell: React.FC = () => {
         onClose={() => setShowSettings(false)}
         onOpenAccount={() => setShowAccountModal(true)}
         onOpenShortcuts={() => setShowShortcutsModal(true)}
+        onOpenSleepTimer={() => setShowSleepTimer(true)}
       />
+      <SleepTimerModal isOpen={showSleepTimer} onClose={() => setShowSleepTimer(false)} />
       <ListenTogetherModal isOpen={showListenTogether} onClose={() => setShowListenTogether(false)} />
       <AccountModal isOpen={showAccountModal} onClose={() => setShowAccountModal(false)} />
       <KeyboardShortcutsModal
         isOpen={showShortcutsModal}
         onClose={() => setShowShortcutsModal(false)}
       />
+
+      {/* Universal Mobile Edge-Swipe-to-Go-Back Visual Indicator */}
+      {isSwipingEdge && (
+        <div
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-[9999] pointer-events-none transition-transform duration-75 ease-out"
+          style={{
+            transform: `translateY(-50%) translateX(${edgeSwipeProgress * 26}px) scale(${0.75 + edgeSwipeProgress * 0.3})`,
+            opacity: Math.min(edgeSwipeProgress * 1.6, 1),
+          }}
+        >
+          <div className="w-12 h-16 rounded-r-3xl liquid-glass border-y border-r border-white/35 flex items-center justify-center pl-1 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-3xl">
+            <ArrowLeft className="w-5 h-5 text-white animate-pulse" />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Universal Back Toast (Prevents Sudden App Exit) */}
+      {exitToastVisible && (
+        <div className="fixed bottom-24 sm:bottom-28 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none animate-scale-in">
+          <div className="px-5 py-2.5 rounded-full liquid-glass border border-white/25 shadow-2xl backdrop-blur-3xl text-white text-xs font-semibold flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-accent-red animate-pulse" />
+            <span>Press back again to exit</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

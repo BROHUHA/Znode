@@ -10,6 +10,7 @@ import {
   ArrowUpLeft,
   Play,
   User,
+  Moon,
 } from 'lucide-react';
 import { YouTubeMusicLogo } from '../common/YouTubeMusicLogo';
 import { useSearchStore } from '../../stores/searchStore';
@@ -24,6 +25,7 @@ interface FrostedTopBarProps {
   onOpenSettings: () => void;
   onOpenEqualizer: () => void;
   onOpenListenTogether: () => void;
+  onOpenSleepTimer?: () => void;
   onOpenAccount?: () => void;
   onOpenDetail?: (
     browseId: string,
@@ -53,6 +55,7 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
   onOpenSettings,
   onOpenEqualizer,
   onOpenListenTogether,
+  onOpenSleepTimer,
   onOpenAccount,
   onOpenDetail,
   className = '',
@@ -77,7 +80,13 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
     clearSearch,
   } = useSearchStore();
 
-  const { playSong, currentPalette } = usePlayerStore();
+  const {
+    playSong,
+    currentPalette,
+    sleepTimerEndTime,
+    sleepTimerEndOfTrack,
+    sleepTimerRemainingSeconds,
+  } = usePlayerStore();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -464,6 +473,22 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
 
         {/* Right Side: Authentic Branded Znode Music Logo (Transparent White Liquid Glass Circle) */}
         <div className="relative pointer-events-auto flex items-center shrink-0" ref={menuRef}>
+          {/* Active Sleep Timer Badge (Live countdown pill) */}
+          {(sleepTimerEndTime || sleepTimerEndOfTrack) && onOpenSleepTimer && (
+            <button
+              onClick={onOpenSleepTimer}
+              className="mr-2 px-2.5 py-1 rounded-full bg-accent-red/20 border border-accent-red/40 text-accent-red text-[11px] font-bold flex items-center gap-1.5 shadow-[0_0_12px_rgba(250,45,72,0.3)] animate-pulse active:scale-95 transition-all cursor-pointer"
+              title="Sleep Timer Active (click to view/edit)"
+            >
+              <Moon className="w-3.5 h-3.5 fill-accent-red" />
+              <span>
+                {sleepTimerEndOfTrack
+                  ? 'Track end'
+                  : `${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m`}
+              </span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsMenuOpen((prev) => !prev)}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass-circle transition-all duration-200 cursor-pointer flex items-center justify-center active:scale-90 hover:scale-105 border border-white/25 shadow-lg group"
@@ -513,6 +538,31 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
                   <div className="text-[10px] text-white/40 truncate">2D Tone Pad & EQ</div>
                 </div>
               </button>
+
+              {onOpenSleepTimer && (
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onOpenSleepTimer();
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-white/90 hover:text-white hover:bg-white/10 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/70 group-hover:text-accent-red group-hover:bg-accent-red/10 transition-colors shrink-0">
+                      <Moon className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-white tracking-tight">Sleep Timer</div>
+                      <div className="text-[10px] text-white/40 truncate">Auto-off timer</div>
+                    </div>
+                  </div>
+                  {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30 shrink-0">
+                      Active
+                    </span>
+                  )}
+                </button>
+              )}
 
               <div className="my-1 border-t border-white/10" />
 

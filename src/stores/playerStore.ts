@@ -14,6 +14,15 @@ import { listenTogetherService } from '../services/listenTogether';
 // High-speed stream cache for instant 0ms playback and gapless skipping
 const streamCache = new Map<string, string>();
 
+let sleepTimerInterval: any = null;
+
+function clearSleepInterval() {
+  if (sleepTimerInterval) {
+    clearInterval(sleepTimerInterval);
+    sleepTimerInterval = null;
+  }
+}
+
 /**
  * Resolves and pre-downloads the upcoming track in advance for 0ms instant switching
  */
@@ -84,6 +93,12 @@ interface PlayerState {
   isNowPlayingOpen: boolean;
   nowPlayingTab: 'PLAYER' | 'LYRICS' | 'QUEUE';
 
+  // Sleep Timer
+  sleepTimerEndTime: number | null;
+  sleepTimerDurationMinutes: number | null;
+  sleepTimerEndOfTrack: boolean;
+  sleepTimerRemainingSeconds: number | null;
+
   // Actions
   playSong: (song: Song, newQueue?: Song[], isExplicitQueue?: boolean) => Promise<void>;
   setCurrentPalette: (palette: PaletteColors) => void;
@@ -109,6 +124,10 @@ interface PlayerState {
   toggleLike: (videoId: string) => void;
   setNowPlayingOpen: (open: boolean) => void;
   setNowPlayingTab: (tab: 'PLAYER' | 'LYRICS' | 'QUEUE') => void;
+  setSleepTimer: (minutes: number) => void;
+  setSleepTimerEndOfTrack: () => void;
+  cancelSleepTimer: () => void;
+  addSleepTimerMinutes: (minutes: number) => void;
 }
 
 function recordPlaybackHistory(song: Song) {
@@ -156,7 +175,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   });
 
   audioEngine.onEnded(() => {
-    const { repeatMode, next, seek } = get();
+    const { repeatMode, next, seek, sleepTimerEndOfTrack, cancelSleepTimer } = get();
+    if (sleepTimerEndOfTrack) {
+      cancelSleepTimer();
+      audioEngine.pause();
+      return;
+    }
     if (repeatMode === 'ONE') {
       seek(0);
       audioEngine.resume();
@@ -198,6 +222,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     likeStatuses: {},
     isNowPlayingOpen: false,
     nowPlayingTab: 'PLAYER',
+    sleepTimerEndTime: null,
+    sleepTimerDurationMinutes: null,
+    sleepTimerEndOfTrack: false,
+    sleepTimerRemainingSeconds: null,
 
     setCurrentPalette: (palette: PaletteColors) => {
       set({ currentPalette: palette });
@@ -708,6 +736,88 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     setNowPlayingOpen: (open: boolean) => set({ isNowPlayingOpen: open }),
     setNowPlayingTab: (tab: 'PLAYER' | 'LYRICS' | 'QUEUE') => set({ nowPlayingTab: tab }),
+
+    setSleepTimer: (minutes: number) => {
+      clearSleepInterval();
+      const endTime = Date.now() + minutes * 60 * 1000;
+      set({
+        sleepTimerEndTime: endTime,
+        sleepTimerDurationMinutes: minutes,
+        sleepTimerEndOfTrack: false,
+        sleepTimerRemainingSeconds: minutes * 60,
+      });
+
+      sleepTimerInterval = setInterval(() => {
+        const currentEnd = get().sleepTimerEndTime;
+        if (!currentEnd) {
+          clearSleepInterval();
+          return;
+        }
+
+        const remaining = Math.max(0, Math.ceil((currentEnd - Date.now()) / 1000));
+        set({ sleepTimerRemainingSeconds: remaining });
+
+        // Smooth volume fade out in the final 5 seconds
+        if (remaining <= 5 && remaining > 0) {
+          const originalVol = get().volume;
+          const fadeVol = Math.max(0, originalVol * (remaining / 5));
+          audioEngine.setVolume(fadeVol);
+        } else if (remaining === 0) {
+          clearSleepInterval();
+          audioEngine.pause();
+          // Restore user's original volume for subsequent playback
+          audioEngine.setVolume(get().volume);
+          set({
+            isPlaying: false,
+            sleepTimerEndTime: null,
+            sleepTimerDurationMinutes: null,
+            sleepTimerRemainingSeconds: null,
+            sleepTimerEndOfTrack: false,
+          });
+
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            try {
+              navigator.vibrate([100, 60, 100]);
+            } catch {}
+          }
+        }
+      }, 1000);
+    },
+
+    setSleepTimerEndOfTrack: () => {
+      clearSleepInterval();
+      set({
+        sleepTimerEndTime: null,
+        sleepTimerDurationMinutes: null,
+        sleepTimerEndOfTrack: true,
+        sleepTimerRemainingSeconds: null,
+      });
+    },
+
+    cancelSleepTimer: () => {
+      clearSleepInterval();
+      audioEngine.setVolume(get().volume);
+      set({
+        sleepTimerEndTime: null,
+        sleepTimerDurationMinutes: null,
+        sleepTimerEndOfTrack: false,
+        sleepTimerRemainingSeconds: null,
+      });
+    },
+
+    addSleepTimerMinutes: (minutes: number) => {
+      const { sleepTimerEndTime } = get();
+      if (sleepTimerEndTime) {
+        const newEndTime = sleepTimerEndTime + minutes * 60 * 1000;
+        const remaining = Math.max(0, Math.ceil((newEndTime - Date.now()) / 1000));
+        set({
+          sleepTimerEndTime: newEndTime,
+          sleepTimerRemainingSeconds: remaining,
+        });
+      } else {
+        get().setSleepTimer(minutes);
+      }
+    },
   };
 });
 

@@ -1,13 +1,15 @@
 import React from 'react';
-import { X, User, ChevronRight, Keyboard } from 'lucide-react';
+import { X, User, ChevronRight, Keyboard, Moon } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
+import { usePlayerStore } from '../../stores/playerStore';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAccount?: () => void;
   onOpenShortcuts?: () => void;
+  onOpenSleepTimer?: () => void;
 }
 
 const ACCENT_PRESETS = [
@@ -23,8 +25,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onOpenAccount,
   onOpenShortcuts,
+  onOpenSleepTimer,
 }) => {
   const { isSignedIn, account } = useAuthStore();
+  const { sleepTimerEndTime, sleepTimerEndOfTrack, sleepTimerRemainingSeconds } = usePlayerStore();
   const {
     themeMode,
     setThemeMode,
@@ -193,6 +197,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <option value="LOW" className="bg-[#1C1C1E]">Standard (128k)</option>
             </select>
           </div>
+
+          {onOpenSleepTimer && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenSleepTimer();
+              }}
+              className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-white/[0.08] transition-all cursor-pointer group text-left"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-accent-red/15 border border-accent-red/30 flex items-center justify-center text-accent-red">
+                  <Moon className="w-4 h-4 fill-accent-red/30" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-white group-hover:text-accent-red transition-colors">
+                    Sleep Timer
+                  </div>
+                  <div className="text-xs text-white/50">
+                    {sleepTimerEndOfTrack
+                      ? 'Stopping at end of current track'
+                      : sleepTimerEndTime
+                      ? `Active: ${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)} minutes left`
+                      : 'Automatically stop playback'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
+                    Active
+                  </span>
+                )}
+                <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white transition-colors" />
+              </div>
+            </button>
+          )}
         </section>
 
         {/* Desktop Controls & Shortcuts */}

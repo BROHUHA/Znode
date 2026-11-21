@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Compass, Home, Library, Search, User, Users, Sliders, Settings } from 'lucide-react';
+import { Compass, Home, Library, Search, User, Users, Sliders, Settings, Moon } from 'lucide-react';
 import { YouTubeMusicLogo } from '../common/YouTubeMusicLogo';
 import { useAuthStore } from '../../stores/authStore';
+import { usePlayerStore } from '../../stores/playerStore';
 
 export type NavTab = 'home' | 'explore' | 'library' | 'search';
 
@@ -12,9 +13,11 @@ interface DesktopSidebarProps {
   onOpenSettings?: () => void;
   onOpenEqualizer?: () => void;
   onOpenListenTogether?: () => void;
+  onOpenSleepTimer?: () => void;
   isSettingsOpen?: boolean;
   isEqualizerOpen?: boolean;
   isListenTogetherOpen?: boolean;
+  isSleepTimerOpen?: boolean;
 }
 
 export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
@@ -24,11 +27,14 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   onOpenSettings,
   onOpenEqualizer,
   onOpenListenTogether,
+  onOpenSleepTimer,
   isSettingsOpen = false,
   isEqualizerOpen = false,
   isListenTogetherOpen = false,
+  isSleepTimerOpen = false,
 }) => {
   const { isSignedIn, account } = useAuthStore();
+  const { sleepTimerEndTime, sleepTimerEndOfTrack } = usePlayerStore();
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       return localStorage.getItem('sidebar_collapsed') === 'true';
@@ -57,6 +63,16 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     ...(onOpenEqualizer
       ? [{ id: 'equalizer' as const, label: 'Equalizer', icon: Sliders, onClick: onOpenEqualizer }]
       : []),
+    ...(onOpenSleepTimer
+      ? [
+          {
+            id: 'sleep-timer' as const,
+            label: sleepTimerEndTime || sleepTimerEndOfTrack ? 'Sleep Timer (On)' : 'Sleep Timer',
+            icon: Moon,
+            onClick: onOpenSleepTimer,
+          },
+        ]
+      : []),
     ...(onOpenListenTogether
       ? [{ id: 'listen-together' as const, label: 'Listen Together', icon: Users, onClick: onOpenListenTogether }]
       : []),
@@ -70,6 +86,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     ? 'settings'
     : isEqualizerOpen
     ? 'equalizer'
+    : isSleepTimerOpen
+    ? 'sleep-timer'
     : isListenTogetherOpen
     ? 'listen-together'
     : currentTab;
