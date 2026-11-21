@@ -154,7 +154,7 @@ export const AppShell: React.FC = () => {
             src={fadingArtwork}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[65px] sm:blur-[90px] saturate-[175%] brightness-[0.72] scale-[1.35] transition-opacity duration-1000 opacity-0 pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] scale-[1.22] transition-opacity duration-1000 opacity-0 pointer-events-none"
           />
         )}
 
@@ -165,15 +165,15 @@ export const AppShell: React.FC = () => {
             src={activeArtwork}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[65px] sm:blur-[90px] saturate-[175%] brightness-[0.72] scale-[1.35] transition-opacity duration-1000 opacity-60 pointer-events-none animate-fadeIn"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] scale-[1.22] transition-opacity duration-1000 opacity-65 pointer-events-none animate-fadeIn"
           />
         ) : (
           /* Subtle default ambient wash when no track is playing */
-          <div className="absolute inset-0 bg-gradient-to-br from-[#FA2D48]/14 via-[#8B5CF6]/10 to-transparent filter blur-[80px] opacity-40 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#FA2D48]/14 via-[#8B5CF6]/10 to-transparent filter blur-[60px] opacity-40 pointer-events-none" />
         )}
 
         {/* Contrast Scrim: ensures sharp legibility for text, capsules & cards */}
-        <div className="absolute inset-0 bg-black/45 pointer-events-none" />
+        <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       </div>
 
       {/* 1. Desktop Sidebar (Left side, >= 768px) */}
