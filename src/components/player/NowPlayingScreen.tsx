@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 import { usePlayerStore } from '../../stores/playerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { MeshGradient } from './MeshGradient';
 import { lyricsService } from '../../services/lyricsService';
 import { jioSaavnService } from '../../services/jiosaavn';
 import { innertubeService } from '../../services/innertube';
@@ -698,16 +697,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* 1. Base color from palette */}
-      <MeshGradient
-        primaryColor={palette.dominant}
-        secondaryColor={palette.secondary}
-        bottomColor={palette.bottomColor}
-        darkBase={palette.darkBase || '#120d18'}
-        className="opacity-50"
-      />
-
-      {/* 2. Apple Music Transparent Frosted BG Blending (Light/Translucent, Not Dark):
+      {/* Apple Music Transparent Frosted BG Blending (Light/Translucent, Not Dark):
            - Layer A: Full-bleed vibrant ambient color wash.
            - Layer B: Vertically inverted (flipped) artwork reflection with high brightness.
            - Layer C: Ultra-translucent light scrim preserving artwork colors and luminous glow. */}

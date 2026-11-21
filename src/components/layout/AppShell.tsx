@@ -1,10 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { DesktopSidebar, NavTab } from './DesktopSidebar';
 import { GlassNavBar } from './GlassNavBar';
 import { FrostedTopBar } from './FrostedTopBar';
 import { MiniPlayer } from '../player/MiniPlayer';
 import { NowPlayingScreen } from '../player/NowPlayingScreen';
-import { MeshGradient } from '../player/MeshGradient';
 import { HomeView } from '../../views/HomeView';
 import { ExploreView } from '../../views/ExploreView';
 import { SearchView } from '../../views/SearchView';
@@ -19,11 +18,10 @@ import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { BrowseTarget } from '../../types';
 import { usePlayerStore } from '../../stores/playerStore';
 import { useSearchStore } from '../../stores/searchStore';
-import { DEFAULT_PALETTE } from '../../utils/paletteExtractor';
+import { cleanThumbnailUrl } from '../../utils/thumbnail';
 
 export const AppShell: React.FC = () => {
-  const { currentPalette, currentSong } = usePlayerStore();
-  const activePalette = currentPalette || DEFAULT_PALETTE;
+  const { currentSong } = usePlayerStore();
   const { results: searchResults } = useSearchStore();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [isScrolled, setIsScrolled] = useState(false);
@@ -36,6 +34,28 @@ export const AppShell: React.FC = () => {
   const [showListenTogether, setShowListenTogether] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  // Dynamic blurred artwork background state (100% accurate song artwork color theme)
+  const currentArtwork = currentSong?.thumbnailUrl
+    ? cleanThumbnailUrl(currentSong.thumbnailUrl, currentSong.videoId)
+    : null;
+
+  const [activeArtwork, setActiveArtwork] = useState<string | null>(null);
+  const [fadingArtwork, setFadingArtwork] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentArtwork && currentArtwork !== activeArtwork) {
+      setFadingArtwork(activeArtwork);
+      setActiveArtwork(currentArtwork);
+      const timer = setTimeout(() => {
+        setFadingArtwork(null);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (!currentArtwork) {
+      setActiveArtwork(null);
+      setFadingArtwork(null);
+    }
+  }, [currentArtwork, activeArtwork]);
 
   // Desktop Keyboard Shortcuts handler (Space = play/pause, Left/Right = skip 10s)
   useKeyboardShortcuts({
@@ -125,49 +145,36 @@ export const AppShell: React.FC = () => {
   };
 
   return (
-    <div
-      className="flex h-screen w-screen overflow-hidden text-white select-none relative transition-colors duration-1000"
-      style={{
-        backgroundColor: activePalette.darkBase || '#07070a',
-      }}
-    >
-      {/* Full-bleed Dynamic Adaptive Mesh Backdrop (Desktop & Mobile) */}
-      <div
-        className="fixed inset-0 pointer-events-none transition-opacity duration-1000 z-0 overflow-hidden"
-        style={{
-          opacity: currentSong ? 0.48 : 0.28,
-        }}
-      >
-        <MeshGradient
-          primaryColor={activePalette.dominant}
-          secondaryColor={activePalette.secondary}
-          bottomColor={activePalette.bottomColor}
-          darkBase={activePalette.darkBase}
-        />
-      </div>
+    <div className="flex h-screen w-screen overflow-hidden text-white select-none relative bg-[#07070a]">
+      {/* 100% Accurate Dynamic Blurred Artwork Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
+        {/* Fading Out Previous Artwork Layer for seamless crossfades */}
+        {fadingArtwork && (
+          <img
+            src={fadingArtwork}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[65px] sm:blur-[90px] saturate-[175%] brightness-[0.72] scale-[1.35] transition-opacity duration-1000 opacity-0 pointer-events-none"
+          />
+        )}
 
-      {/* Dynamic Ambient Liquid Glow Layers synchronized with song autotheming */}
-      <div
-        className="ambient-glow-1 transition-all duration-1000 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle, ${activePalette.dominant}38 0%, transparent 70%)`,
-        }}
-      />
-      <div
-        className="ambient-glow-2 transition-all duration-1000 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle, ${activePalette.secondary}30 0%, transparent 70%)`,
-        }}
-      />
-      <div
-        className="fixed inset-0 pointer-events-none transition-all duration-1000 z-0"
-        style={{
-          background: `
-            radial-gradient(ellipse 110% 80% at 80% 90%, ${activePalette.dominant}22 0%, transparent 65%),
-            radial-gradient(circle at 20% 10%, ${activePalette.secondary}18 0%, transparent 55%)
-          `,
-        }}
-      />
+        {/* Current Active Track Blurred Artwork Layer */}
+        {activeArtwork ? (
+          <img
+            key={activeArtwork}
+            src={activeArtwork}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[65px] sm:blur-[90px] saturate-[175%] brightness-[0.72] scale-[1.35] transition-opacity duration-1000 opacity-60 pointer-events-none animate-fadeIn"
+          />
+        ) : (
+          /* Subtle default ambient wash when no track is playing */
+          <div className="absolute inset-0 bg-gradient-to-br from-[#FA2D48]/14 via-[#8B5CF6]/10 to-transparent filter blur-[80px] opacity-40 pointer-events-none" />
+        )}
+
+        {/* Contrast Scrim: ensures sharp legibility for text, capsules & cards */}
+        <div className="absolute inset-0 bg-black/45 pointer-events-none" />
+      </div>
 
       {/* 1. Desktop Sidebar (Left side, >= 768px) */}
       <DesktopSidebar
@@ -254,12 +261,7 @@ export const AppShell: React.FC = () => {
         </div>
 
         {/* Mobile Bottom Fade Scrim: Dissolves scrolling items smoothly above bottom navigation */}
-        <div
-          className="md:hidden bottom-fade-scrim"
-          style={{
-            background: `linear-gradient(to top, ${activePalette.darkBase}fa 0%, ${activePalette.darkBase}b0 45%, ${activePalette.darkBase}20 85%, transparent 100%)`,
-          }}
-        />
+        <div className="md:hidden bottom-fade-scrim" />
 
         {/* Mobile Liquid Glass Navigation Bar with Integrated Expand/Shrink Player */}
         <GlassNavBar
