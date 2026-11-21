@@ -225,17 +225,56 @@ export class InnertubeService {
       }
     }
 
-    // Ensure chips are available
-    if (!homeFeed.chips || homeFeed.chips.length === 0) {
-      homeFeed.chips = [...DEFAULT_HOME_CHIPS];
-    } else {
-      const existingIds = new Set(homeFeed.chips.map((c) => c.id));
-      for (const def of DEFAULT_HOME_CHIPS) {
-        if (!existingIds.has(def.id)) {
-          homeFeed.chips.push(def);
-        }
+    // Curate and order the chips list:
+    // 'All' is ALWAYS index 0, followed by priority regional languages & genres, then YouTube Music mood chips
+    const curatedChips: HomeChip[] = [];
+    const seenChipIds = new Set<string>();
+
+    // 1. First chip is ALWAYS 'All' (default selected)
+    curatedChips.push({ id: 'all', title: 'All' });
+    seenChipIds.add('all');
+
+    // 2. High-priority regional languages & trending categories
+    const priorityCategories: HomeChip[] = [
+      { id: 'mollywood', title: 'Malayalam' },
+      { id: 'kollywood', title: 'Tamil' },
+      { id: 'english', title: 'English' },
+      { id: 'bollywood', title: 'Hindi' },
+      { id: 'tollywood', title: 'Telugu' },
+      { id: 'punjabi', title: 'Punjabi' },
+      { id: 'new_releases', title: 'New Releases' },
+      { id: 'videos', title: 'Music Videos' },
+      { id: 'pop', title: 'Pop & Global' },
+      { id: 'hiphop', title: 'Hip-Hop' },
+    ];
+
+    for (const cat of priorityCategories) {
+      curatedChips.push(cat);
+      seenChipIds.add(cat.id);
+    }
+
+    // 3. Merge YouTube Music dynamic mood chips (preserving native navigation params)
+    const rawYtChips = homeFeed.chips || [];
+    for (const raw of rawYtChips) {
+      const lowerTitle = raw.title.toLowerCase().trim();
+      if (lowerTitle === 'all') continue;
+      if (!seenChipIds.has(raw.id) && !seenChipIds.has(lowerTitle)) {
+        curatedChips.push(raw);
+        seenChipIds.add(raw.id);
+        seenChipIds.add(lowerTitle);
       }
     }
+
+    // 4. Fill in any remaining defaults
+    for (const def of DEFAULT_HOME_CHIPS) {
+      if (!seenChipIds.has(def.id) && !seenChipIds.has(def.title.toLowerCase().trim())) {
+        curatedChips.push(def);
+        seenChipIds.add(def.id);
+        seenChipIds.add(def.title.toLowerCase().trim());
+      }
+    }
+
+    homeFeed.chips = curatedChips;
 
     // When on default 'All' feed, ensure dynamic trend shelves are ALWAYS present every time
     if (!params) {

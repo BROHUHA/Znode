@@ -301,15 +301,15 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenDetail }) => {
             <button
               key={chip.id}
               onClick={() => handleChipSelect(chip)}
-              className={`inline-flex items-center justify-center h-8 sm:h-8.5 px-4.5 rounded-full text-xs sm:text-[13px] font-medium tracking-normal text-center leading-none shrink-0 transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap ${
+              className={`inline-flex items-center justify-center h-8 sm:h-9 px-5 min-w-[56px] rounded-full text-xs sm:text-[13px] font-medium tracking-normal text-center leading-none shrink-0 transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap ${
                 isActive
                   ? chip.id === 'all'
-                    ? 'bg-white text-black font-bold shadow-[0_2px_16px_rgba(255,255,255,0.3)] border border-white/50 scale-[1.03]'
-                    : 'bg-gradient-to-r from-accent-red to-[#FF4B63] text-white font-bold shadow-[0_0_20px_rgba(250,45,72,0.45)] border border-white/30 scale-[1.03]'
+                    ? 'bg-white text-black font-bold shadow-[0_2px_16px_rgba(255,255,255,0.35)] border border-white/60 scale-[1.02]'
+                    : 'bg-gradient-to-r from-accent-red to-[#FF4B63] text-white font-bold shadow-[0_0_20px_rgba(250,45,72,0.45)] border border-white/30 scale-[1.02]'
                   : 'bg-white/[0.08] hover:bg-white/[0.15] text-white/90 hover:text-white border border-white/15 backdrop-blur-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12)]'
               }`}
             >
-              <span className="flex items-center justify-center text-center leading-none">
+              <span className="inline-flex items-center justify-center text-center leading-none select-none">
                 {chip.title}
               </span>
             </button>
