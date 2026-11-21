@@ -284,6 +284,37 @@ export class InnertubeService {
       if (!hasSeasonal) {
         homeFeed.shelves.splice(7, 0, trendingService.getSeasonalShelf());
       }
+
+      // Rich language & genre shelves for comprehensive continuous feed
+      const hasMalayalam = homeFeed.shelves.some((s) => /malayalam|mollywood/i.test(s.title));
+      if (!hasMalayalam) {
+        homeFeed.shelves.push(trendingService.getMalayalamShelf());
+      }
+
+      const hasTamil = homeFeed.shelves.some((s) => /tamil|kollywood/i.test(s.title));
+      if (!hasTamil) {
+        homeFeed.shelves.push(trendingService.getTamilShelf());
+      }
+
+      const hasEnglish = homeFeed.shelves.some((s) => /english|global hot/i.test(s.title));
+      if (!hasEnglish) {
+        homeFeed.shelves.push(trendingService.getEnglishShelf());
+      }
+
+      const hasHindi = homeFeed.shelves.some((s) => /hindi|bollywood/i.test(s.title));
+      if (!hasHindi) {
+        homeFeed.shelves.push(trendingService.getHindiShelf());
+      }
+
+      const hasTelugu = homeFeed.shelves.some((s) => /telugu|tollywood/i.test(s.title));
+      if (!hasTelugu) {
+        homeFeed.shelves.push(trendingService.getTeluguShelf());
+      }
+
+      const hasPunjabi = homeFeed.shelves.some((s) => /punjabi/i.test(s.title));
+      if (!hasPunjabi) {
+        homeFeed.shelves.push(trendingService.getPunjabiShelf());
+      }
     }
 
     if (!params && historySongs.status === 'fulfilled' && historySongs.value.length > 0) {

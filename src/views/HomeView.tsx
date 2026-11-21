@@ -288,17 +288,25 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenDetail }) => {
   return (
     <div className="flex flex-col gap-6.5 p-2.5 sm:p-4 pb-28 md:pb-12 max-w-7xl mx-auto w-full">
       {/* 1. Dynamic Mood, Cinema & Trend Filter Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none px-2.5 pt-1 -mb-1 select-none">
+      <div
+        className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none px-2.5 pt-1 -mb-1 select-none"
+        style={{
+          maskImage: 'linear-gradient(to right, black 0%, black calc(100% - 32px), transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to right, black 0%, black calc(100% - 32px), transparent 100%)',
+        }}
+      >
         {chips.map((chip) => {
           const isActive = activeChip === chip.id;
           return (
             <button
               key={chip.id}
               onClick={() => handleChipSelect(chip)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-[13px] font-bold tracking-wide shrink-0 transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap ${
+              className={`px-4.5 py-2 rounded-full text-xs sm:text-[13px] font-semibold tracking-wide shrink-0 transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shadow-sm ${
                 isActive
-                  ? 'bg-white text-black shadow-lg shadow-white/15'
-                  : 'bg-white/[0.08] hover:bg-white/[0.14] text-white/80 hover:text-white border border-white/10'
+                  ? chip.id === 'all'
+                    ? 'bg-white text-black font-bold shadow-[0_2px_16px_rgba(255,255,255,0.25)] border border-white/40 scale-[1.03]'
+                    : 'bg-gradient-to-r from-accent-red to-[#FF4B63] text-white font-bold shadow-[0_0_20px_rgba(250,45,72,0.45)] border border-white/25 scale-[1.03]'
+                  : 'liquid-glass-pill text-white/80 hover:text-white border border-white/15 bg-white/[0.08] hover:bg-white/[0.14] backdrop-blur-md'
               }`}
             >
               {chip.title}

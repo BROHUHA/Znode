@@ -693,6 +693,124 @@ export const PUNJABI_ITEMS: ShelfItem[] = [
 ];
 
 // ==========================================
+// 2.55 ENGLISH & GLOBAL HITS (Billboard Hot 100 & Pop / Hip-Hop Anthems)
+// ==========================================
+export const ENGLISH_GLOBAL_ITEMS: ShelfItem[] = [
+  {
+    title: 'Espresso',
+    subtitle: "Sabrina Carpenter • Short n' Sweet",
+    thumbnailUrl: 'https://i.ytimg.com/vi/eVli-tstM5E/hqdefault.jpg',
+    videoId: 'eVli-tstM5E',
+    customIndex: '1',
+  },
+  {
+    title: 'Birds of a Feather',
+    subtitle: 'Billie Eilish • HIT ME HARD AND SOFT',
+    thumbnailUrl: 'https://i.ytimg.com/vi/d5gf9dXHevw/hqdefault.jpg',
+    videoId: 'd5gf9dXHevw',
+    customIndex: '2',
+  },
+  {
+    title: 'Die With A Smile',
+    subtitle: 'Lady Gaga, Bruno Mars',
+    thumbnailUrl: 'https://i.ytimg.com/vi/kPa7bsKwL-8/hqdefault.jpg',
+    videoId: 'kPa7bsKwL-8',
+    customIndex: '3',
+  },
+  {
+    title: 'Starboy',
+    subtitle: 'The Weeknd, Daft Punk • Starboy',
+    thumbnailUrl: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg',
+    videoId: '34Na4j8AVgA',
+    customIndex: '4',
+  },
+  {
+    title: 'Blinding Lights',
+    subtitle: 'The Weeknd • After Hours',
+    thumbnailUrl: 'https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg',
+    videoId: '4NRXx6U8ABQ',
+    customIndex: '5',
+  },
+  {
+    title: 'Lose Control',
+    subtitle: "Teddy Swims • I've Tried Everything But Therapy",
+    thumbnailUrl: 'https://i.ytimg.com/vi/GZ3zL7kT6_c/hqdefault.jpg',
+    videoId: 'GZ3zL7kT6_c',
+    customIndex: '6',
+  },
+  {
+    title: 'Greedy',
+    subtitle: 'Tate McRae • THINK LATER',
+    thumbnailUrl: 'https://i.ytimg.com/vi/To4SWGZkEPk/hqdefault.jpg',
+    videoId: 'To4SWGZkEPk',
+    customIndex: '7',
+  },
+  {
+    title: 'As It Was',
+    subtitle: "Harry Styles • Harry's House",
+    thumbnailUrl: 'https://i.ytimg.com/vi/H5v3kku4y6Q/hqdefault.jpg',
+    videoId: 'H5v3kku4y6Q',
+    customIndex: '8',
+  },
+  {
+    title: 'Cruel Summer',
+    subtitle: 'Taylor Swift • Lover',
+    thumbnailUrl: 'https://i.ytimg.com/vi/ic8j13piAhQ/hqdefault.jpg',
+    videoId: 'ic8j13piAhQ',
+    customIndex: '9',
+  },
+  {
+    title: 'Stay',
+    subtitle: 'The Kid LAROI, Justin Bieber • F*CK LOVE 3',
+    thumbnailUrl: 'https://i.ytimg.com/vi/kTJczUoc26U/hqdefault.jpg',
+    videoId: 'kTJczUoc26U',
+    customIndex: '10',
+  },
+  {
+    title: 'Heat Waves',
+    subtitle: 'Glass Animals • Dreamland',
+    thumbnailUrl: 'https://i.ytimg.com/vi/mRD0-GxqHVo/hqdefault.jpg',
+    videoId: 'mRD0-GxqHVo',
+    customIndex: '11',
+  },
+  {
+    title: 'Shape of You',
+    subtitle: 'Ed Sheeran • ÷ (Divide)',
+    thumbnailUrl: 'https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg',
+    videoId: 'JGwWNGJdvx8',
+    customIndex: '12',
+  },
+  {
+    title: 'Levitating',
+    subtitle: 'Dua Lipa • Future Nostalgia',
+    thumbnailUrl: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg',
+    videoId: 'TUVcZfQe-Kw',
+    customIndex: '13',
+  },
+  {
+    title: 'Sunflower',
+    subtitle: 'Post Malone, Swae Lee • Spider-Man',
+    thumbnailUrl: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
+    videoId: 'ApXoWvfEYVU',
+    customIndex: '14',
+  },
+  {
+    title: 'Believer',
+    subtitle: 'Imagine Dragons • Evolve',
+    thumbnailUrl: 'https://i.ytimg.com/vi/7wtfhZwyrcc/hqdefault.jpg',
+    videoId: '7wtfhZwyrcc',
+    customIndex: '15',
+  },
+  {
+    title: 'Water',
+    subtitle: 'Tyla • TYLA',
+    thumbnailUrl: 'https://i.ytimg.com/vi/XoiOOiuH8iI/hqdefault.jpg',
+    videoId: 'XoiOOiuH8iI',
+    customIndex: '16',
+  },
+];
+
+// ==========================================
 // 2.6 NEW RELEASES (Fresh hot chart drops)
 // ==========================================
 export const NEW_RELEASES_ITEMS: ShelfItem[] = [
@@ -959,25 +1077,25 @@ export const COMMUNITY_ITEMS: ShelfItem[] = [
 // ==========================================
 export const DEFAULT_HOME_CHIPS: HomeChip[] = [
   { id: 'all', title: 'All' },
-  { id: 'new_releases', title: 'New releases' },
-  { id: 'videos', title: 'Music videos' },
-  { id: 'covers_remixes', title: 'Covers & remixes' },
-  { id: 'community', title: 'Community' },
-  { id: 'mollywood', title: 'Mollywood' },
-  { id: 'tollywood', title: 'Tollywood' },
-  { id: 'kollywood', title: 'Kollywood' },
-  { id: 'bollywood', title: 'Bollywood' },
+  { id: 'mollywood', title: 'Malayalam' },
+  { id: 'kollywood', title: 'Tamil' },
+  { id: 'english', title: 'English' },
+  { id: 'bollywood', title: 'Hindi' },
+  { id: 'tollywood', title: 'Telugu' },
   { id: 'punjabi', title: 'Punjabi' },
-  { id: 'quick_picks', title: 'Quick plays' },
-  { id: 'hits', title: "Today's Hits" },
-  { id: 'feel_good', title: 'Feel good' },
-  { id: 'party', title: 'Party' },
+  { id: 'new_releases', title: 'New Releases' },
+  { id: 'videos', title: 'Music Videos' },
+  { id: 'pop', title: 'Pop & Global' },
+  { id: 'hiphop', title: 'Hip-Hop & Rap' },
+  { id: 'party', title: 'Party & Dance' },
   { id: 'romance', title: 'Romance' },
-  { id: 'relax', title: 'Relax' },
-  { id: 'energise', title: 'Energise' },
-  { id: 'workout', title: 'Work out' },
+  { id: 'feel_good', title: 'Feel Good' },
+  { id: 'relax', title: 'Chill & Lo-Fi' },
+  { id: 'workout', title: 'Workout' },
+  { id: 'acoustic', title: 'Acoustic & Indie' },
+  { id: 'covers_remixes', title: 'Covers & Remixes' },
+  { id: 'community', title: 'Community' },
   { id: 'focus', title: 'Focus' },
-  { id: 'podcasts', title: 'Podcasts' },
 ];
 
 export class TrendingService {
@@ -1156,6 +1274,66 @@ export class TrendingService {
     };
   }
 
+  public getMalayalamShelf(): HomeShelf {
+    return {
+      title: 'Mollywood & Malayalam Hits',
+      subtitle: 'Top Malayalam blockbusters & soulful melodies',
+      strapline: 'Mollywood',
+      type: 'DEFAULT',
+      items: MOLLYWOOD_ITEMS,
+    };
+  }
+
+  public getTamilShelf(): HomeShelf {
+    return {
+      title: 'Kollywood & Tamil Wave',
+      subtitle: 'Thalapathy, Thalaivar, Anirudh & A.R. Rahman blockbusters',
+      strapline: 'Kollywood',
+      type: 'DEFAULT',
+      items: KOLLYWOOD_ITEMS,
+    };
+  }
+
+  public getEnglishShelf(): HomeShelf {
+    return {
+      title: 'English & Global Hot 50',
+      subtitle: 'Billboard Hot 100, global viral sensations & pop anthems',
+      strapline: 'Global Hits',
+      type: 'DEFAULT',
+      items: ENGLISH_GLOBAL_ITEMS,
+    };
+  }
+
+  public getHindiShelf(): HomeShelf {
+    return {
+      title: 'Bollywood & Hindi Blockbusters',
+      subtitle: 'Chart-topping Hindi tracks & timeless romances',
+      strapline: 'Bollywood',
+      type: 'DEFAULT',
+      items: BOLLYWOOD_ITEMS,
+    };
+  }
+
+  public getTeluguShelf(): HomeShelf {
+    return {
+      title: 'Tollywood & Telugu Bangers',
+      subtitle: 'Pushpa 2, Devara, Guntur Kaaram & RRR',
+      strapline: 'Tollywood',
+      type: 'DEFAULT',
+      items: TOLLYWOOD_ITEMS,
+    };
+  }
+
+  public getPunjabiShelf(): HomeShelf {
+    return {
+      title: 'Punjabi Hits & Non-Stop Energy',
+      subtitle: 'Karan Aujla, Diljit Dosanjh, Shubh & non-stop energy',
+      strapline: 'Punjabi',
+      type: 'DEFAULT',
+      items: PUNJABI_ITEMS,
+    };
+  }
+
   /**
    * Returns instant personalized static shelves for a specific selected chip/mood/cinema
    * Guarantees 16 unique tracks without duplicates or repeating previews!
@@ -1168,17 +1346,17 @@ export class TrendingService {
       return this.shelfCache.get(cleanId)!;
     }
 
-    // 1. MOLLYWOOD (Malayalam Cinema - 16 Distinct Items)
-    if (cleanId === 'mollywood') {
+    // 1. MOLLYWOOD / MALAYALAM (16 Distinct Items)
+    if (cleanId === 'mollywood' || cleanId === 'malayalam') {
       return [
         {
-          title: 'Mollywood Hits',
+          title: 'Mollywood & Malayalam Hits',
           subtitle: 'Top Malayalam blockbusters & soulful melodies',
           type: 'QUICK_PICKS',
           items: MOLLYWOOD_ITEMS.slice(0, 16),
         },
         {
-          title: 'Mollywood Top 10 Charts',
+          title: 'Malayalam Top 10 Charts',
           subtitle: 'Aavesham, Manjummel Boys & more trending hits',
           type: 'CHART_SONGS',
           items: MOLLYWOOD_ITEMS.slice(0, 10).map((it, idx) => ({
@@ -1187,11 +1365,12 @@ export class TrendingService {
           })),
         },
         this.getRegionalSpotlightShelf(),
+        this.getMusicVideosShelf(),
       ];
     }
 
-    // 2. TOLLYWOOD (Telugu Cinema - 16 Distinct Items)
-    if (cleanId === 'tollywood') {
+    // 2. TOLLYWOOD / TELUGU (16 Distinct Items)
+    if (cleanId === 'tollywood' || cleanId === 'telugu') {
       return [
         {
           title: 'Tollywood Bangers',
@@ -1212,8 +1391,8 @@ export class TrendingService {
       ];
     }
 
-    // 3. KOLLYWOOD (Tamil Cinema - 16 Distinct Items)
-    if (cleanId === 'kollywood') {
+    // 3. KOLLYWOOD / TAMIL (16 Distinct Items)
+    if (cleanId === 'kollywood' || cleanId === 'tamil') {
       return [
         {
           title: 'Kollywood Wave',
@@ -1234,8 +1413,8 @@ export class TrendingService {
       ];
     }
 
-    // 4. BOLLYWOOD (Hindi Cinema - 16 Distinct Items)
-    if (cleanId === 'bollywood') {
+    // 4. BOLLYWOOD / HINDI (16 Distinct Items)
+    if (cleanId === 'bollywood' || cleanId === 'hindi') {
       return [
         {
           title: 'Bollywood Hits',
@@ -1253,6 +1432,101 @@ export class TrendingService {
           })),
         },
         this.getTrendingCommunityShelf(),
+      ];
+    }
+
+    // 4.5 ENGLISH & GLOBAL (16 Distinct Items)
+    if (cleanId === 'english' || cleanId === 'global') {
+      return [
+        {
+          title: 'English & Global Hot 50',
+          subtitle: 'Billboard Hot 100, global viral sensations & pop anthems',
+          type: 'QUICK_PICKS',
+          items: ENGLISH_GLOBAL_ITEMS.slice(0, 16),
+        },
+        {
+          title: 'Global Top 10 Charts',
+          subtitle: 'Sabrina Carpenter, Billie Eilish, The Weeknd & Lady Gaga',
+          type: 'CHART_SONGS',
+          items: ENGLISH_GLOBAL_ITEMS.slice(0, 10).map((it, idx) => ({
+            ...it,
+            customIndex: String(idx + 1),
+          })),
+        },
+        this.getMusicVideosShelf(),
+        this.getCoversRemixesShelf(),
+      ];
+    }
+
+    // 4.6 POP & GLOBAL
+    if (cleanId === 'pop') {
+      return [
+        {
+          title: 'Pop Anthems & Radio Hits',
+          subtitle: 'Catchy hooks, dance pop & viral global sensations',
+          type: 'QUICK_PICKS',
+          items: [
+            ENGLISH_GLOBAL_ITEMS[0],
+            ENGLISH_GLOBAL_ITEMS[1],
+            ENGLISH_GLOBAL_ITEMS[2],
+            ENGLISH_GLOBAL_ITEMS[6],
+            ENGLISH_GLOBAL_ITEMS[7],
+            ENGLISH_GLOBAL_ITEMS[8],
+            ENGLISH_GLOBAL_ITEMS[9],
+            ENGLISH_GLOBAL_ITEMS[12],
+            ENGLISH_GLOBAL_ITEMS[13],
+            BOLLYWOOD_ITEMS[1],
+            PUNJABI_ITEMS[1],
+            ENGLISH_GLOBAL_ITEMS[15],
+          ],
+        },
+        this.getMusicVideosShelf(),
+      ];
+    }
+
+    // 4.7 HIP-HOP & RAP
+    if (cleanId === 'hiphop' || cleanId === 'rap') {
+      return [
+        {
+          title: 'Hip-Hop & Rap Bangers',
+          subtitle: 'Heavy basslines, trap beats & lyrical fire',
+          type: 'QUICK_PICKS',
+          items: [
+            PUNJABI_ITEMS[0],
+            ENGLISH_GLOBAL_ITEMS[3],
+            MOLLYWOOD_ITEMS[0],
+            KOLLYWOOD_ITEMS[2],
+            PUNJABI_ITEMS[6],
+            PUNJABI_ITEMS[14],
+            ENGLISH_GLOBAL_ITEMS[13],
+            MOLLYWOOD_ITEMS[1],
+            PUNJABI_ITEMS[2],
+            KOLLYWOOD_ITEMS[6],
+          ],
+        },
+        this.getMusicVideosShelf(),
+      ];
+    }
+
+    // 4.8 ACOUSTIC & INDIE
+    if (cleanId === 'acoustic' || cleanId === 'indie') {
+      return [
+        {
+          title: 'Acoustic & Indie Waves',
+          subtitle: 'Intimate melodies, gentle guitar strings & raw vocals',
+          type: 'QUICK_PICKS',
+          items: [
+            ENGLISH_GLOBAL_ITEMS[5],
+            BOLLYWOOD_ITEMS[2],
+            MOLLYWOOD_ITEMS[3],
+            ENGLISH_GLOBAL_ITEMS[7],
+            BOLLYWOOD_ITEMS[8],
+            MOLLYWOOD_ITEMS[9],
+            ENGLISH_GLOBAL_ITEMS[11],
+            BOLLYWOOD_ITEMS[11],
+          ],
+        },
+        this.getCoversRemixesShelf(),
       ];
     }
 
@@ -1521,7 +1795,19 @@ export class TrendingService {
         chartTitle: 'Mollywood Top 10 Charts',
         subtitle: 'Top Malayalam blockbusters & soulful melodies',
       },
+      malayalam: {
+        query: 'Malayalam Top Hits trending songs',
+        title: 'Mollywood & Malayalam Hits',
+        chartTitle: 'Mollywood Top 10 Charts',
+        subtitle: 'Top Malayalam blockbusters & soulful melodies',
+      },
       tollywood: {
+        query: 'Telugu Top Hits mass songs',
+        title: 'Tollywood Bangers',
+        chartTitle: 'Tollywood Top 10 Charts',
+        subtitle: 'High-voltage Telugu mass anthems & chartbusters',
+      },
+      telugu: {
         query: 'Telugu Top Hits mass songs',
         title: 'Tollywood Bangers',
         chartTitle: 'Tollywood Top 10 Charts',
@@ -1533,11 +1819,47 @@ export class TrendingService {
         chartTitle: 'Kollywood Top 10 Charts',
         subtitle: 'Thalapathy, Thalaivar & Anirudh blockbusters',
       },
+      tamil: {
+        query: 'Tamil Top Hits blockbusters',
+        title: 'Kollywood Wave',
+        chartTitle: 'Kollywood Top 10 Charts',
+        subtitle: 'Thalapathy, Thalaivar & Anirudh blockbusters',
+      },
       bollywood: {
         query: 'Bollywood Top Hits chartbusters',
         title: 'Bollywood Hits',
         chartTitle: 'Bollywood Top Charts',
         subtitle: 'Chart-topping Hindi tracks & timeless romances',
+      },
+      hindi: {
+        query: 'Bollywood Top Hits chartbusters',
+        title: 'Bollywood Hits',
+        chartTitle: 'Bollywood Top Charts',
+        subtitle: 'Chart-topping Hindi tracks & timeless romances',
+      },
+      english: {
+        query: 'Billboard Hot 100 top english songs',
+        title: 'English & Global Hot 50',
+        chartTitle: 'Global Hot Charts',
+        subtitle: 'Billboard Hot 100, viral chartbusters & pop anthems',
+      },
+      pop: {
+        query: 'Top pop hits global radio songs',
+        title: 'Pop & Global Anthems',
+        chartTitle: 'Top Pop Charts',
+        subtitle: 'Catchy hooks, dance pop & viral global sensations',
+      },
+      hiphop: {
+        query: 'Top hip hop rap songs trending',
+        title: 'Hip-Hop & Rap Bangers',
+        chartTitle: 'Top Rap Charts',
+        subtitle: 'Heavy basslines, trap beats & lyrical fire',
+      },
+      acoustic: {
+        query: 'acoustic indie folk unplugged songs',
+        title: 'Acoustic & Indie Waves',
+        chartTitle: 'Top Acoustic Charts',
+        subtitle: 'Intimate melodies, gentle guitar strings & raw vocals',
       },
       punjabi: {
         query: 'Punjabi Top Hits songs',
@@ -1668,6 +1990,7 @@ export class TrendingService {
       KOLLYWOOD_ITEMS,
       BOLLYWOOD_ITEMS,
       PUNJABI_ITEMS,
+      ENGLISH_GLOBAL_ITEMS,
       NEW_RELEASES_ITEMS,
       MUSIC_VIDEO_ITEMS,
       COVERS_REMIXES_ITEMS,
