@@ -331,13 +331,24 @@ export class InnertubeService {
    * Explore Feed: Trending, Charts, Moods & Genres
    */
   public async getExplore(): Promise<HomeShelf[]> {
-    const [exploreRaw, chartsRaw] = await Promise.allSettled([
-      this.post('browse', { browseId: 'FEmusic_explore' }),
-      this.post('browse', { browseId: 'FEmusic_charts' }),
-    ]);
+    let exploreShelves: HomeShelf[] = [];
+    let chartsShelves: HomeShelf[] = [];
 
-    const exploreShelves = exploreRaw.status === 'fulfilled' ? this.parseShelves(exploreRaw.value) : [];
-    const chartsShelves = chartsRaw.status === 'fulfilled' ? this.parseShelves(chartsRaw.value) : [];
+    try {
+      const [exploreRaw, chartsRaw] = await Promise.allSettled([
+        this.post('browse', { browseId: 'FEmusic_explore' }),
+        this.post('browse', { browseId: 'FEmusic_charts' }),
+      ]);
+
+      if (exploreRaw.status === 'fulfilled' && exploreRaw.value) {
+        exploreShelves = this.parseShelves(exploreRaw.value);
+      }
+      if (chartsRaw.status === 'fulfilled' && chartsRaw.value) {
+        chartsShelves = this.parseShelves(chartsRaw.value);
+      }
+    } catch (e) {
+      console.warn('Explore browse error:', e);
+    }
 
     const merged = [...exploreShelves, ...chartsShelves];
 
@@ -376,6 +387,40 @@ export class InnertubeService {
           },
         ],
       });
+      merged.push(trendingService.getHitsShelf());
+      merged.push(trendingService.getQuickPicksShelf());
+    }
+
+    const hasNewReleases = merged.some((s) => /release|album|fresh drop/i.test(s.title));
+    if (!hasNewReleases) {
+      merged.push(trendingService.getNewReleasesShelf());
+    }
+
+    const hasTrending = merged.some((s) => /trending|video/i.test(s.title));
+    if (!hasTrending) {
+      merged.push(trendingService.getMusicVideosShelf());
+      merged.push(trendingService.getCoversRemixesShelf());
+      merged.push(trendingService.getTrendingCommunityShelf());
+      merged.push(trendingService.getRegionalSpotlightShelf());
+    }
+
+    const hasMoods = merged.some((s) => s.type === 'MOOD_GENRE' || /mood|genre/i.test(s.title));
+    if (!hasMoods) {
+      merged.push({
+        title: 'Moods & Genres',
+        subtitle: 'Music for every mood and genre',
+        type: 'MOOD_GENRE' as any,
+        items: [
+          { title: 'Chill & Relax', subtitle: 'Calm & acoustic vibes', browseId: 'FEmusic_moods_and_genres', stripeColor: 0x6c5ce7 },
+          { title: 'Feel Good', subtitle: 'Uplifting & joyful melodies', browseId: 'FEmusic_moods_and_genres', stripeColor: 0x00b894 },
+          { title: 'Party & Dance', subtitle: 'Club bangers & electronic', browseId: 'FEmusic_moods_and_genres', stripeColor: 0xe17055 },
+          { title: 'Romance', subtitle: 'Soul-stirring love songs', browseId: 'FEmusic_moods_and_genres', stripeColor: 0xfd79a8 },
+          { title: 'Workout & Energy', subtitle: 'High-octane motivation', browseId: 'FEmusic_moods_and_genres', stripeColor: 0x0984e3 },
+          { title: 'Focus & Study', subtitle: 'Deep concentration sounds', browseId: 'FEmusic_moods_and_genres', stripeColor: 0x2d3436 },
+          { title: 'Bollywood Hits', subtitle: 'Top Indian film melodies', browseId: 'FEmusic_moods_and_genres', stripeColor: 0xff7675 },
+          { title: 'Mollywood & South', subtitle: 'Top South Indian blockbusters', browseId: 'FEmusic_moods_and_genres', stripeColor: 0x6c5ce7 },
+        ],
+      });
     }
 
     return merged;
@@ -399,7 +444,7 @@ export class InnertubeService {
       console.warn('Innertube search failed, activating multi-provider fallback:', err);
     }
 
-    // High-speed fallback: JioSaavn search (unblocked, full metadata & 320kbps streams)
+    // High-speed fallback 1: JioSaavn search (unblocked, full metadata & 320kbps streams)
     try {
       const { jioSaavnService } = await import('./jiosaavn');
       const saavnResults = await jioSaavnService.search(query);
@@ -411,13 +456,25 @@ export class InnertubeService {
             title: s.title,
             artist: s.artist,
             thumbnailUrl: s.image || '/logo.svg',
-            duration: 0,
-            has320: true,
+            sourceQuality: 'LOSSLESS',
           },
         }));
       }
     } catch (sErr) {
       console.warn('JioSaavn search fallback failed:', sErr);
+    }
+
+    // High-speed fallback 2: local trending & regional catalogue
+    try {
+      const localMatches = trendingService.searchLocalCatalogue(query);
+      if (localMatches && localMatches.length > 0) {
+        return localMatches.map((s) => ({
+          type: 'Track' as const,
+          song: s,
+        }));
+      }
+    } catch (lErr) {
+      console.warn('Local catalogue search failed:', lErr);
     }
 
     return [];
@@ -479,7 +536,7 @@ export class InnertubeService {
       }
     } catch {}
 
-    // Fallback: JioSaavn typeahead
+    // Fallback 1: JioSaavn typeahead
     try {
       const { jioSaavnService } = await import('./jiosaavn');
       const saavnResults = await jioSaavnService.search(query);
@@ -491,9 +548,19 @@ export class InnertubeService {
             title: s.title,
             artist: s.artist,
             thumbnailUrl: s.image || '/logo.svg',
-            duration: 0,
-            has320: true,
+            sourceQuality: 'LOSSLESS',
           },
+        }));
+      }
+    } catch {}
+
+    // Fallback 2: Local catalogue typeahead
+    try {
+      const localMatches = trendingService.searchLocalCatalogue(query);
+      if (localMatches && localMatches.length > 0) {
+        return localMatches.slice(0, 5).map((s) => ({
+          type: 'Track' as const,
+          song: s,
         }));
       }
     } catch {}

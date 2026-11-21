@@ -9,13 +9,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const queryString = req.url && req.url.includes('?') ? req.url.split('?')[1] : '';
+    let queryString = '';
+    if (req.query && Object.keys(req.query).length > 0) {
+      queryString = new URLSearchParams(req.query).toString();
+    } else if (req.url && req.url.includes('?')) {
+      queryString = req.url.split('?')[1];
+    }
+
     const targetUrl = `https://www.jiosaavn.com/api.php?${queryString}`;
 
     const saavnRes = await fetch(targetUrl, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
         'Referer': 'https://www.jiosaavn.com/',
         'Accept': 'application/json, text/plain, */*',
       },
@@ -30,4 +37,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error.message || 'Internal proxy error' });
   }
 }
-

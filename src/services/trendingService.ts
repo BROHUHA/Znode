@@ -4,7 +4,7 @@
  * and regional personalisation for Mollywood, Tollywood, Kollywood, Bollywood, and Punjabi.
  */
 
-import { HomeChip, HomeShelf, ShelfItem } from '../types';
+import { HomeChip, HomeShelf, ShelfItem, Song } from '../types';
 
 // ==========================================
 // 1. QUICK PICKS (Verified Tracks & Working YouTube IDs)
@@ -1651,6 +1651,54 @@ export class TrendingService {
     const fallback = this.getShelvesForChip(chipId, currentShelves);
     this.shelfCache.set(cleanId, fallback);
     return fallback;
+  }
+
+  /**
+   * Fast offline / zero-network fallback catalogue search
+   * Scans all verified regional & trending tracks for matching titles or artists
+   */
+  public searchLocalCatalogue(query: string): Song[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+
+    const allCollections = [
+      QUICK_PICKS_ITEMS,
+      MOLLYWOOD_ITEMS,
+      TOLLYWOOD_ITEMS,
+      KOLLYWOOD_ITEMS,
+      BOLLYWOOD_ITEMS,
+      PUNJABI_ITEMS,
+      NEW_RELEASES_ITEMS,
+      MUSIC_VIDEO_ITEMS,
+      COVERS_REMIXES_ITEMS,
+      COMMUNITY_ITEMS,
+    ];
+
+    const seenIds = new Set<string>();
+    const matches: Song[] = [];
+
+    for (const collection of allCollections) {
+      for (const item of collection) {
+        if (!item.videoId || seenIds.has(item.videoId)) continue;
+        const titleMatch = (item.title || '').toLowerCase().includes(q);
+        const artistMatch = (item.subtitle || '').toLowerCase().includes(q);
+
+        if (titleMatch || artistMatch) {
+          seenIds.add(item.videoId);
+          const parts = (item.subtitle || '').split(' • ');
+          matches.push({
+            videoId: item.videoId,
+            title: item.title,
+            artist: parts[0]?.trim() || item.subtitle || 'Artist',
+            thumbnailUrl: item.thumbnailUrl || `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
+            albumName: parts[1]?.trim() || null,
+            sourceQuality: 'LOSSLESS',
+          });
+        }
+      }
+    }
+
+    return matches.slice(0, 25);
   }
 }
 
