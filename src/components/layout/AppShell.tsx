@@ -49,7 +49,7 @@ export const AppShell: React.FC = () => {
       setActiveArtwork(currentArtwork);
       const timer = setTimeout(() => {
         setFadingArtwork(null);
-      }, 1000);
+      }, 800);
       return () => clearTimeout(timer);
     } else if (!currentArtwork) {
       setActiveArtwork(null);
@@ -151,21 +151,22 @@ export const AppShell: React.FC = () => {
         {/* Fading Out Previous Artwork Layer for seamless crossfades */}
         {fadingArtwork && (
           <img
+            key={`fade-out-${fadingArtwork}`}
             src={fadingArtwork}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] scale-[1.22] transition-opacity duration-1000 opacity-0 pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] pointer-events-none animate-bg-fadeout"
           />
         )}
 
         {/* Current Active Track Blurred Artwork Layer */}
         {activeArtwork ? (
           <img
-            key={activeArtwork}
+            key={`active-${activeArtwork}`}
             src={activeArtwork}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] scale-[1.22] transition-opacity duration-1000 opacity-65 pointer-events-none animate-fadeIn"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] pointer-events-none animate-bg-crossfade"
           />
         ) : (
           /* Subtle default ambient wash when no track is playing */

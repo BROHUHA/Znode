@@ -704,12 +704,13 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 select-none">
         {/* Layer A: Full-bleed luminous ambient wash */}
         <img
+          key={`wash-a-${currentSong?.videoId || artworkUrl}`}
           src={artworkUrl}
           alt=""
           aria-hidden="true"
           referrerPolicy="no-referrer"
           onError={handleArtworkError}
-          className="absolute inset-0 w-full h-full object-cover object-center filter blur-[42px] sm:blur-[55px] saturate-[170%] brightness-[0.88] opacity-95 scale-[1.25] transition-all duration-700"
+          className="absolute inset-0 w-full h-full object-cover object-center filter blur-[42px] sm:blur-[55px] saturate-[170%] brightness-[0.88] scale-[1.25] animate-bg-crossfade"
         />
 
         {/* Layer B: Vertically inverted reflection in lower portion — crisp, vibrant, and translucent */}
@@ -723,12 +724,13 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
           }}
         >
           <img
+            key={`wash-b-${currentSong?.videoId || artworkUrl}`}
             src={artworkUrl}
             alt=""
             aria-hidden="true"
             referrerPolicy="no-referrer"
             onError={handleArtworkError}
-            className="w-full h-full object-cover object-bottom filter blur-[26px] sm:blur-[34px] saturate-[180%] brightness-[0.86] opacity-95"
+            className="w-full h-full object-cover object-bottom filter blur-[26px] sm:blur-[34px] saturate-[180%] brightness-[0.86] animate-bg-crossfade"
             style={{
               transform: 'scaleY(-1) scaleX(1.2)',
               transformOrigin: 'top center',
@@ -758,11 +760,12 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
       {nowPlayingTab === 'PLAYER' && (
         <div className="absolute top-0 left-0 right-0 h-[50vh] sm:h-[53vh] max-h-[520px] overflow-hidden pointer-events-none z-0">
           <img
+            key={`hero-${currentSong?.videoId || artworkUrl}`}
             src={artworkUrl}
             alt={currentSong.title}
             referrerPolicy="no-referrer"
             onError={handleArtworkError}
-            className="w-full h-full object-cover object-top transition-transform duration-700 ease-out"
+            className="w-full h-full object-cover object-top animate-hero-fade"
             style={{
               maskImage:
                 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 68%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0.5) 88%, rgba(0,0,0,0.15) 96%, rgba(0,0,0,0) 100%)',

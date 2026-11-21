@@ -130,11 +130,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
         <div className="w-[34px] h-[34px] rounded-xl overflow-hidden shrink-0 bg-white/10 border border-white/20 shadow-sm flex items-center justify-center">
           {!isImgBroken ? (
             <img
+              key={`thumb-inline-${currentSong?.videoId || thumbSrc}`}
               src={thumbSrc}
               alt={currentSong.title}
               referrerPolicy="no-referrer"
               onError={handleThumbnailError}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover animate-artwork-fade"
             />
           ) : (
             <div
@@ -222,11 +223,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
         <div className="relative w-11 h-11 rounded-2xl overflow-hidden shrink-0 shadow-md bg-white/10 border border-white/25 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
           {!isImgBroken ? (
             <img
+              key={`thumb-expanded-${currentSong?.videoId || thumbSrc}`}
               src={thumbSrc}
               alt={currentSong.title}
               referrerPolicy="no-referrer"
               onError={handleThumbnailError}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover animate-artwork-fade"
               loading="eager"
             />
           ) : (
