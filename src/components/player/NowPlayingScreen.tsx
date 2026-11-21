@@ -371,7 +371,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   useEffect(() => {
     if (!artworkUrl) return;
     let isMounted = true;
-    extractPalette(artworkUrl).then((p) => {
+    extractPalette(artworkUrl, currentSong?.title, currentSong?.artist, currentSong?.videoId).then((p) => {
       if (isMounted) {
         setInternalPalette(p);
         setCurrentPalette(p);
@@ -380,7 +380,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [artworkUrl, setCurrentPalette]);
+  }, [artworkUrl, currentSong?.title, currentSong?.artist, currentSong?.videoId, setCurrentPalette]);
 
   // Load downloaded songs list
   useEffect(() => {

@@ -4,6 +4,7 @@ import { GlassNavBar } from './GlassNavBar';
 import { FrostedTopBar } from './FrostedTopBar';
 import { MiniPlayer } from '../player/MiniPlayer';
 import { NowPlayingScreen } from '../player/NowPlayingScreen';
+import { MeshGradient } from '../player/MeshGradient';
 import { HomeView } from '../../views/HomeView';
 import { ExploreView } from '../../views/ExploreView';
 import { SearchView } from '../../views/SearchView';
@@ -18,9 +19,11 @@ import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { BrowseTarget } from '../../types';
 import { usePlayerStore } from '../../stores/playerStore';
 import { useSearchStore } from '../../stores/searchStore';
+import { DEFAULT_PALETTE } from '../../utils/paletteExtractor';
 
 export const AppShell: React.FC = () => {
   const { currentPalette, currentSong } = usePlayerStore();
+  const activePalette = currentPalette || DEFAULT_PALETTE;
   const { results: searchResults } = useSearchStore();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [isScrolled, setIsScrolled] = useState(false);
@@ -123,11 +126,49 @@ export const AppShell: React.FC = () => {
 
   return (
     <div
-      className="flex h-screen w-screen overflow-hidden text-white select-none relative"
+      className="flex h-screen w-screen overflow-hidden text-white select-none relative transition-colors duration-1000"
       style={{
-        backgroundColor: '#07070a',
+        backgroundColor: activePalette.darkBase || '#07070a',
       }}
     >
+      {/* Full-bleed Dynamic Adaptive Mesh Backdrop (Desktop & Mobile) */}
+      <div
+        className="fixed inset-0 pointer-events-none transition-opacity duration-1000 z-0 overflow-hidden"
+        style={{
+          opacity: currentSong ? 0.48 : 0.28,
+        }}
+      >
+        <MeshGradient
+          primaryColor={activePalette.dominant}
+          secondaryColor={activePalette.secondary}
+          bottomColor={activePalette.bottomColor}
+          darkBase={activePalette.darkBase}
+        />
+      </div>
+
+      {/* Dynamic Ambient Liquid Glow Layers synchronized with song autotheming */}
+      <div
+        className="ambient-glow-1 transition-all duration-1000 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle, ${activePalette.dominant}38 0%, transparent 70%)`,
+        }}
+      />
+      <div
+        className="ambient-glow-2 transition-all duration-1000 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle, ${activePalette.secondary}30 0%, transparent 70%)`,
+        }}
+      />
+      <div
+        className="fixed inset-0 pointer-events-none transition-all duration-1000 z-0"
+        style={{
+          background: `
+            radial-gradient(ellipse 110% 80% at 80% 90%, ${activePalette.dominant}22 0%, transparent 65%),
+            radial-gradient(circle at 20% 10%, ${activePalette.secondary}18 0%, transparent 55%)
+          `,
+        }}
+      />
+
       {/* 1. Desktop Sidebar (Left side, >= 768px) */}
       <DesktopSidebar
         currentTab={currentTab}
@@ -190,8 +231,13 @@ export const AppShell: React.FC = () => {
         {/* Top Fade Blur Layer (Progressive Glass Fade matching TopFadeBlur.kt) */}
         <div className="top-fade-blur" />
 
-        {/* Top Fade Scrim Layer (Clean neutral glass gradient wash) */}
-        <div className="top-fade-scrim" />
+        {/* Top Fade Scrim Layer (Eased glass gradient wash matching song autotheme) */}
+        <div
+          className="top-fade-scrim"
+          style={{
+            background: `linear-gradient(to bottom, ${activePalette.darkBase}ea 0%, ${activePalette.darkBase}88 45%, transparent 100%)`,
+          }}
+        />
 
         {/* Floating FrostedTopBar over TopFadeBlur */}
         <FrostedTopBar
@@ -216,9 +262,7 @@ export const AppShell: React.FC = () => {
         <div
           className="md:hidden bottom-fade-scrim"
           style={{
-            background: currentPalette
-              ? `linear-gradient(to top, ${currentPalette.darkBase}fa 0%, ${currentPalette.darkBase}b0 45%, ${currentPalette.darkBase}20 85%, transparent 100%)`
-              : undefined,
+            background: `linear-gradient(to top, ${activePalette.darkBase}fa 0%, ${activePalette.darkBase}b0 45%, ${activePalette.darkBase}20 85%, transparent 100%)`,
           }}
         />
 

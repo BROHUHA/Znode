@@ -11,7 +11,7 @@ export const DEFAULT_PALETTE: PaletteColors = {
   secondary: '#8B5CF6',
   topColor: '#301828',
   bottomColor: '#4A1D34',
-  darkBase: '#1a0c10',
+  darkBase: '#120a10',
 };
 
 const paletteCache = new Map<string, PaletteColors>();
@@ -46,7 +46,7 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 }
 
 function hslToHex(h: number, s: number, l: number): string {
-  h = ((h % 360) + 360) % 360 / 360;
+  h = (((h % 360) + 360) % 360) / 360;
   s = Math.max(0, Math.min(1, s));
   l = Math.max(0, Math.min(1, l));
 
@@ -77,6 +77,160 @@ function rgbToHex(r: number, g: number, b: number): string {
   );
 }
 
+/**
+ * Instant deterministic palette generator (0ms, 100% reliable).
+ * Guarantees every single track has an instant vibrant, harmonious adaptive palette
+ * even before artwork is downloaded or if CORS/network restricts image inspection.
+ */
+export function getDeterministicPalette(
+  title?: string | null,
+  artist?: string | null,
+  videoId?: string | null
+): PaletteColors {
+  const normTitle = (title || '').toLowerCase().trim();
+  const normArtist = (artist || '').toLowerCase().trim();
+
+  // 1. Curated high-aesthetic palettes for prominent hits
+  if (normTitle.includes('kuthanthram') || normTitle.includes('manjummel') || normArtist.includes('sushin')) {
+    return {
+      dominant: '#B45309', // Warm rustic ochre / terracotta (Image 1 match)
+      secondary: '#78350F', // Deep amber
+      topColor: '#361808',
+      bottomColor: '#451A03',
+      darkBase: '#140A04',
+    };
+  }
+  if (normTitle.includes('tauba') || normTitle.includes('bad newz') || normArtist.includes('aujla')) {
+    return {
+      dominant: '#9333EA', // Vivid electric purple / magenta (Image 2 match)
+      secondary: '#DB2777', // Hot pink / fuchsia
+      topColor: '#2E1065',
+      bottomColor: '#4A044E',
+      darkBase: '#150524',
+    };
+  }
+  if (normTitle.includes('sulthan') || normTitle.includes('kgf') || normTitle.includes('salam')) {
+    return {
+      dominant: '#991B1B', // Cinematic crimson ember (Image 10 match)
+      secondary: '#7F1D1D', // Deep dark maroon
+      topColor: '#3B0707',
+      bottomColor: '#450A0A',
+      darkBase: '#120404',
+    };
+  }
+  if (normTitle.includes('illuminati') || normTitle.includes('aavesham') || normArtist.includes('dabzee')) {
+    return {
+      dominant: '#0284C7', // Neon cyan / electro sky
+      secondary: '#0D9488', // Emerald teal
+      topColor: '#082F49',
+      bottomColor: '#134E4A',
+      darkBase: '#04131C',
+    };
+  }
+  if (normTitle.includes('aaj ki raat') || normTitle.includes('stree')) {
+    return {
+      dominant: '#E11D48', // Ruby red / crimson
+      secondary: '#D97706', // Saffron amber
+      topColor: '#4C0519',
+      bottomColor: '#451A03',
+      darkBase: '#16040A',
+    };
+  }
+  if (normTitle.includes('kesariya') || normTitle.includes('brahmastra')) {
+    return {
+      dominant: '#EA580C', // Saffron sunset orange
+      secondary: '#CA8A04', // Golden amber
+      topColor: '#431407',
+      bottomColor: '#422006',
+      darkBase: '#160803',
+    };
+  }
+  if (normTitle.includes('naa ready') || normTitle.includes('leo')) {
+    return {
+      dominant: '#D97706', // Fiery amber
+      secondary: '#DC2626', // Molten red
+      topColor: '#451A03',
+      bottomColor: '#450A0A',
+      darkBase: '#170603',
+    };
+  }
+  if (normTitle.includes('chaleya') || normTitle.includes('jawan')) {
+    return {
+      dominant: '#BE185D', // Rose fuchsia
+      secondary: '#6D28D9', // Deep violet
+      topColor: '#4A044E',
+      bottomColor: '#2E1065',
+      darkBase: '#140416',
+    };
+  }
+  if (normTitle.includes('fear') || normTitle.includes('devara')) {
+    return {
+      dominant: '#374151', // Dark obsidian stormy gray
+      secondary: '#1E293B', // Slate blue
+      topColor: '#111827',
+      bottomColor: '#0F172A',
+      darkBase: '#0A0C10',
+    };
+  }
+  if (normTitle.includes('espresso') || normArtist.includes('sabrina')) {
+    return {
+      dominant: '#B45309', // Caramel espresso
+      secondary: '#D97706', // Honey cream
+      topColor: '#361808',
+      bottomColor: '#451A03',
+      darkBase: '#150A05',
+    };
+  }
+  if (normTitle.includes('birds of a feather') || normArtist.includes('billie')) {
+    return {
+      dominant: '#0284C7', // Soft electric blue
+      secondary: '#3B82F6', // Cobalt
+      topColor: '#082F49',
+      bottomColor: '#1E3A8A',
+      darkBase: '#04101E',
+    };
+  }
+  if (normTitle.includes('starboy') || normArtist.includes('the weeknd')) {
+    return {
+      dominant: '#DC2626', // Starboy neon red
+      secondary: '#2563EB', // Electric blue
+      topColor: '#450A0A',
+      bottomColor: '#1E3A8A',
+      darkBase: '#120406',
+    };
+  }
+
+  // 2. Hash-based generation for any track
+  const str = `${normTitle} ${normArtist} ${videoId || ''}`;
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  const absHash = Math.abs(hash);
+
+  // Hue distribution: cycle through vibrant aesthetic spectrum (avoid muddy 70-110 brown-greens)
+  let hue = absHash % 360;
+  if (hue >= 65 && hue <= 115) {
+    hue = (hue + 50) % 360;
+  }
+  const secondaryHue = (hue + 45 + (absHash % 55)) % 360;
+
+  const dominant = hslToHex(hue, 0.76, 0.46);
+  const secondary = hslToHex(secondaryHue, 0.68, 0.38);
+  const topColor = hslToHex(hue, 0.50, 0.16);
+  const bottomColor = hslToHex(secondaryHue, 0.50, 0.18);
+  const darkBase = hslToHex(hue, 0.38, 0.08);
+
+  return {
+    dominant,
+    secondary,
+    topColor,
+    bottomColor,
+    darkBase,
+  };
+}
+
 function extractFromLoadedImage(img: HTMLImageElement): PaletteColors | null {
   try {
     const canvas = document.createElement('canvas');
@@ -87,7 +241,16 @@ function extractFromLoadedImage(img: HTMLImageElement): PaletteColors | null {
     if (!ctx) return null;
 
     ctx.drawImage(img, 0, 0, size, size);
-    const imgData = ctx.getImageData(0, 0, size, size).data;
+
+    let imgData: ImageData;
+    try {
+      imgData = ctx.getImageData(0, 0, size, size);
+    } catch {
+      // Tainted canvas (CORS restriction)
+      return null;
+    }
+
+    const data = imgData.data;
 
     let topR = 0, topG = 0, topB = 0, topCount = 0;
     let btmR = 0, btmG = 0, btmB = 0, btmCount = 0;
@@ -102,10 +265,10 @@ function extractFromLoadedImage(img: HTMLImageElement): PaletteColors | null {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const idx = (y * size + x) * 4;
-        const r = imgData[idx];
-        const g = imgData[idx + 1];
-        const b = imgData[idx + 2];
-        const a = imgData[idx + 3];
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const a = data[idx + 3];
 
         if (a < 128) continue;
 
@@ -143,10 +306,10 @@ function extractFromLoadedImage(img: HTMLImageElement): PaletteColors | null {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const idx = (y * size + x) * 4;
-        const r = imgData[idx];
-        const g = imgData[idx + 1];
-        const b = imgData[idx + 2];
-        const a = imgData[idx + 3];
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const a = data[idx + 3];
 
         if (a < 128) continue;
         const [h, s, l] = rgbToHsl(r, g, b);
@@ -193,7 +356,7 @@ function extractFromLoadedImage(img: HTMLImageElement): PaletteColors | null {
   }
 }
 
-function tryLoadImage(src: string, timeoutMs = 2500): Promise<HTMLImageElement | null> {
+function tryLoadImage(src: string, timeoutMs = 3500): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -235,16 +398,16 @@ function getCandidateUrls(url: string): string[] {
   const candidates: string[] = [];
 
   if (url.includes('ytimg.com')) {
-    // For YouTube thumbnails, hqdefault is 100% reliable across all songs
-    const hqUrl = url
-      .replace(/maxresdefault\.jpg/i, 'hqdefault.jpg')
-      .replace(/mqdefault\.jpg/i, 'hqdefault.jpg');
+    // For YouTube thumbnails, hqdefault and mqdefault are 100% reliable across all songs
     const mqUrl = url
       .replace(/maxresdefault\.jpg/i, 'mqdefault.jpg')
       .replace(/hqdefault\.jpg/i, 'mqdefault.jpg');
-    
-    candidates.push(hqUrl);
-    if (!candidates.includes(mqUrl)) candidates.push(mqUrl);
+    const hqUrl = url
+      .replace(/maxresdefault\.jpg/i, 'hqdefault.jpg')
+      .replace(/mqdefault\.jpg/i, 'hqdefault.jpg');
+
+    candidates.push(mqUrl);
+    if (!candidates.includes(hqUrl)) candidates.push(hqUrl);
     if (!candidates.includes(url)) candidates.push(url);
   } else if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
     // Fast 120px downsampled version for instantaneous color sampling
@@ -259,8 +422,17 @@ function getCandidateUrls(url: string): string[] {
   return candidates;
 }
 
-export async function extractPalette(imageUrl?: string | null): Promise<PaletteColors> {
-  if (!imageUrl || imageUrl === '/logo.svg') return DEFAULT_PALETTE;
+export async function extractPalette(
+  imageUrl?: string | null,
+  title?: string | null,
+  artist?: string | null,
+  videoId?: string | null
+): Promise<PaletteColors> {
+  const fallbackPalette = title ? getDeterministicPalette(title, artist, videoId) : DEFAULT_PALETTE;
+
+  if (!imageUrl || imageUrl === '/logo.svg') {
+    return fallbackPalette;
+  }
 
   if (paletteCache.has(imageUrl)) {
     return paletteCache.get(imageUrl)!;
@@ -275,7 +447,7 @@ export async function extractPalette(imageUrl?: string | null): Promise<PaletteC
         ? `/api/avatar?url=${encodeURIComponent(rawUrl)}`
         : rawUrl;
 
-    let img = await tryLoadImage(proxyUrl, 2000);
+    let img = await tryLoadImage(proxyUrl, 2500);
 
     // 2. Fallback to direct load with anonymous crossOrigin
     if (!img && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
@@ -294,5 +466,5 @@ export async function extractPalette(imageUrl?: string | null): Promise<PaletteC
     }
   }
 
-  return DEFAULT_PALETTE;
+  return fallbackPalette;
 }

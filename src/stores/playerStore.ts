@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { Song, RepeatMode, LikeStatus } from '../types';
-import { PaletteColors, extractPalette } from '../utils/paletteExtractor';
+import { PaletteColors, extractPalette, getDeterministicPalette } from '../utils/paletteExtractor';
 import { audioEngine } from '../audio/audioEngine';
 import { innertubeService } from '../services/innertube';
 import { jioSaavnService } from '../services/jiosaavn';
@@ -282,12 +282,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         isPlaying: true,
       });
 
-      // Extract dynamic colors immediately to update adaptive UI on mobile and desktop
+      // 1. Instant 0ms deterministic palette: ensures 100% of songs immediately apply their unique color theme with 0 lag
+      const instantPalette = getDeterministicPalette(resolvedSong.title, resolvedSong.artist, resolvedSong.videoId);
+      get().setCurrentPalette(instantPalette);
+
+      // 2. High-fidelity extracted palette from artwork (async refine)
       const thumbForPalette =
         resolvedSong.thumbnailUrl ||
         (resolvedSong.videoId ? `https://i.ytimg.com/vi/${resolvedSong.videoId}/hqdefault.jpg` : null);
       if (thumbForPalette) {
-        extractPalette(thumbForPalette).then((palette) => {
+        extractPalette(thumbForPalette, resolvedSong.title, resolvedSong.artist, resolvedSong.videoId).then((palette) => {
           if (get().currentSong?.videoId === resolvedSong.videoId) {
             get().setCurrentPalette(palette);
           }

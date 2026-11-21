@@ -3,7 +3,6 @@ import {
   Settings,
   Sliders,
   Users,
-  Menu,
   ArrowLeft,
   Search,
   X,
@@ -463,32 +462,16 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
           </div>
         )}
 
-        {/* Right Side: Znode Music Logo on mobile / Menu Button on desktop */}
-        <div className="relative pointer-events-auto flex items-center shrink-0 gap-2" ref={menuRef}>
-          {/* Mobile View: Authentic Branded Znode Music Logo (Transparent White Liquid Glass Circle) */}
+        {/* Right Side: Authentic Branded Znode Music Logo (Transparent White Liquid Glass Circle) */}
+        <div className="relative pointer-events-auto flex items-center shrink-0" ref={menuRef}>
           <button
             onClick={() => setIsMenuOpen((prev) => !prev)}
-            className="md:hidden w-10 h-10 rounded-full liquid-glass-circle transition-all duration-200 cursor-pointer flex items-center justify-center active:scale-90 hover:scale-105 border border-white/25"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass-circle transition-all duration-200 cursor-pointer flex items-center justify-center active:scale-90 hover:scale-105 border border-white/25 shadow-lg group"
             title="Znode Music (ZN) Menu"
             aria-label="Znode Music (ZN) Menu"
             aria-expanded={isMenuOpen}
           >
-            <YouTubeMusicLogo size={24} className="opacity-95 drop-shadow-[0_1px_4px_rgba(255,255,255,0.3)]" />
-          </button>
-
-          {/* Desktop/Tablet View: Clean Liquid Glass Menu Icon Button */}
-          <button
-            onClick={() => setIsMenuOpen((prev) => !prev)}
-            className={`hidden md:flex p-2 sm:p-2.5 rounded-xl liquid-glass-pill transition-all cursor-pointer items-center justify-center ${
-              isMenuOpen
-                ? 'bg-white/20 text-white ring-1 ring-white/30'
-                : 'text-white/80 hover:text-white hover:bg-white/10'
-            }`}
-            title="Menu"
-            aria-label="Toggle menu"
-            aria-expanded={isMenuOpen}
-          >
-            <Menu className="w-5 h-5 text-white" />
+            <YouTubeMusicLogo size={22} className="opacity-95 drop-shadow-[0_1px_4px_rgba(255,255,255,0.4)] group-hover:scale-105 transition-transform" />
           </button>
 
           {/* Frosted Dropdown Menu (Right aligned) */}
