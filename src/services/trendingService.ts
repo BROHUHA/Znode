@@ -706,15 +706,15 @@ export const ENGLISH_GLOBAL_ITEMS: ShelfItem[] = [
   {
     title: 'Birds of a Feather',
     subtitle: 'Billie Eilish • HIT ME HARD AND SOFT',
-    thumbnailUrl: 'https://i.ytimg.com/vi/d5gf9dXHevw/hqdefault.jpg',
-    videoId: 'd5gf9dXHevw',
+    thumbnailUrl: 'https://i.ytimg.com/vi/V9PVRfjEBTI/mqdefault.jpg',
+    videoId: 'V9PVRfjEBTI',
     customIndex: '2',
   },
   {
     title: 'Die With A Smile',
     subtitle: 'Lady Gaga, Bruno Mars',
-    thumbnailUrl: 'https://i.ytimg.com/vi/kPa7bsKwL-8/hqdefault.jpg',
-    videoId: 'kPa7bsKwL-8',
+    thumbnailUrl: 'https://i.ytimg.com/vi/kPa7bsKwL-c/mqdefault.jpg',
+    videoId: 'kPa7bsKwL-c',
     customIndex: '3',
   },
   {
@@ -807,6 +807,192 @@ export const ENGLISH_GLOBAL_ITEMS: ShelfItem[] = [
     thumbnailUrl: 'https://i.ytimg.com/vi/XoiOOiuH8iI/hqdefault.jpg',
     videoId: 'XoiOOiuH8iI',
     customIndex: '16',
+  },
+];
+
+// ==========================================
+// 2.56 HIP-HOP & RAP ANTHEMS
+// ==========================================
+export const HIPHOP_ITEMS: ShelfItem[] = [
+  {
+    title: 'Big Dawgs',
+    subtitle: 'Hanumankind, Kalmi',
+    thumbnailUrl: 'https://i.ytimg.com/vi/hOHKltAiKXQ/mqdefault.jpg',
+    videoId: 'hOHKltAiKXQ',
+    customIndex: '1',
+  },
+  {
+    title: 'Not Like Us',
+    subtitle: 'Kendrick Lamar',
+    thumbnailUrl: 'https://i.ytimg.com/vi/H58vbez_m4E/mqdefault.jpg',
+    videoId: 'H58vbez_m4E',
+    customIndex: '2',
+  },
+  {
+    title: 'Houdini',
+    subtitle: 'Eminem • The Death of Slim Shady',
+    thumbnailUrl: 'https://i.ytimg.com/vi/22tVWwmTie8/mqdefault.jpg',
+    videoId: '22tVWwmTie8',
+    customIndex: '3',
+  },
+  {
+    title: 'MILLION DOLLAR BABY',
+    subtitle: 'Tommy Richman',
+    thumbnailUrl: 'https://i.ytimg.com/vi/WcIcvapfqXw/mqdefault.jpg',
+    videoId: 'WcIcvapfqXw',
+    customIndex: '4',
+  },
+  {
+    title: 'FE!N',
+    subtitle: 'Travis Scott, Playboi Carti • UTOPIA',
+    thumbnailUrl: 'https://i.ytimg.com/vi/U-l4ya3ejko/mqdefault.jpg',
+    videoId: 'U-l4ya3ejko',
+    customIndex: '5',
+  },
+  {
+    title: 'One Dance',
+    subtitle: 'Drake, Wizkid, Kyla • Views',
+    thumbnailUrl: 'https://i.ytimg.com/vi/3IIspaicSnY/mqdefault.jpg',
+    videoId: '3IIspaicSnY',
+    customIndex: '6',
+  },
+  {
+    title: 'Doja',
+    subtitle: 'Central Cee',
+    thumbnailUrl: 'https://i.ytimg.com/vi/3y-O-4IL-PU/mqdefault.jpg',
+    videoId: '3y-O-4IL-PU',
+    customIndex: '7',
+  },
+  {
+    title: "God's Plan",
+    subtitle: 'Drake • Scorpion',
+    thumbnailUrl: 'https://i.ytimg.com/vi/xpVfcZ0ZcFM/mqdefault.jpg',
+    videoId: 'xpVfcZ0ZcFM',
+    customIndex: '8',
+  },
+];
+
+// ==========================================
+// 2.57 CHILL & LO-FI VIBES
+// ==========================================
+export const CHILL_LOFI_ITEMS: ShelfItem[] = [
+  {
+    title: 'golden hour',
+    subtitle: 'JVKE • this is what ____ feels like',
+    thumbnailUrl: 'https://i.ytimg.com/vi/PEM0Vs8jf1w/mqdefault.jpg',
+    videoId: 'PEM0Vs8jf1w',
+    customIndex: '1',
+  },
+  {
+    title: 'Until I Found You',
+    subtitle: 'Stephen Sanchez • Easy On My Eyes',
+    thumbnailUrl: 'https://i.ytimg.com/vi/GxldQ9eX2wo/mqdefault.jpg',
+    videoId: 'GxldQ9eX2wo',
+    customIndex: '2',
+  },
+  {
+    title: 'Glimpse of Us',
+    subtitle: 'Joji • SMITHEREENS',
+    thumbnailUrl: 'https://i.ytimg.com/vi/NgsWGfU97YQ/mqdefault.jpg',
+    videoId: 'NgsWGfU97YQ',
+    customIndex: '3',
+  },
+  {
+    title: 'Daylight',
+    subtitle: 'David Kushner',
+    thumbnailUrl: 'https://i.ytimg.com/vi/MoN9ql6Yymw/mqdefault.jpg',
+    videoId: 'MoN9ql6Yymw',
+    customIndex: '4',
+  },
+  {
+    title: 'death bed (coffee for your head)',
+    subtitle: 'Powfu, beabadoobee',
+    thumbnailUrl: 'https://i.ytimg.com/vi/jJPMnTXl63E/mqdefault.jpg',
+    videoId: 'jJPMnTXl63E',
+    customIndex: '5',
+  },
+  {
+    title: 'Heather',
+    subtitle: 'Conan Gray • Kid Krow',
+    thumbnailUrl: 'https://i.ytimg.com/vi/24u3NoPvgMw/mqdefault.jpg',
+    videoId: '24u3NoPvgMw',
+    customIndex: '6',
+  },
+  {
+    title: 'Dandelions',
+    subtitle: 'Ruth B. • Safe Haven',
+    thumbnailUrl: 'https://i.ytimg.com/vi/W8a4sUabCUo/mqdefault.jpg',
+    videoId: 'W8a4sUabCUo',
+    customIndex: '7',
+  },
+  {
+    title: 'Here With Me',
+    subtitle: 'd4vd • Petals to Thorns',
+    thumbnailUrl: 'https://i.ytimg.com/vi/g_wE_w_p8wU/mqdefault.jpg',
+    videoId: 'g_wE_w_p8wU',
+    customIndex: '8',
+  },
+];
+
+// ==========================================
+// 2.58 EDM & CLUB ANTHEMS
+// ==========================================
+export const EDM_ITEMS: ShelfItem[] = [
+  {
+    title: 'Faded',
+    subtitle: 'Alan Walker',
+    thumbnailUrl: 'https://i.ytimg.com/vi/60ItHLz5WEA/mqdefault.jpg',
+    videoId: '60ItHLz5WEA',
+    customIndex: '1',
+  },
+  {
+    title: 'Closer',
+    subtitle: 'The Chainsmokers, Halsey • Collage',
+    thumbnailUrl: 'https://i.ytimg.com/vi/PT2_F-1esPk/mqdefault.jpg',
+    videoId: 'PT2_F-1esPk',
+    customIndex: '2',
+  },
+  {
+    title: 'Titanium',
+    subtitle: 'David Guetta, Sia • Nothing but the Beat',
+    thumbnailUrl: 'https://i.ytimg.com/vi/JRfuAukYTKg/mqdefault.jpg',
+    videoId: 'JRfuAukYTKg',
+    customIndex: '3',
+  },
+  {
+    title: 'Wake Me Up',
+    subtitle: 'Avicii • True',
+    thumbnailUrl: 'https://i.ytimg.com/vi/IcrbM1l_BoI/mqdefault.jpg',
+    videoId: 'IcrbM1l_BoI',
+    customIndex: '4',
+  },
+  {
+    title: 'Summer',
+    subtitle: 'Calvin Harris • Motion',
+    thumbnailUrl: 'https://i.ytimg.com/vi/ebXbLfLACGM/mqdefault.jpg',
+    videoId: 'ebXbLfLACGM',
+    customIndex: '5',
+  },
+  {
+    title: 'Animals',
+    subtitle: 'Martin Garrix',
+    thumbnailUrl: 'https://i.ytimg.com/vi/gCYcHz2FgFw/mqdefault.jpg',
+    videoId: 'gCYcHz2FgFw',
+    customIndex: '6',
+  },
+  {
+    title: 'Lean On',
+    subtitle: 'Major Lazer, DJ Snake, MØ',
+    thumbnailUrl: 'https://i.ytimg.com/vi/YqeW9_5kURI/mqdefault.jpg',
+    videoId: 'YqeW9_5kURI',
+    customIndex: '7',
+  },
+  {
+    title: 'The Spectre',
+    subtitle: 'Alan Walker',
+    thumbnailUrl: 'https://i.ytimg.com/vi/wJnBTPUQS5A/mqdefault.jpg',
+    videoId: 'wJnBTPUQS5A',
+    customIndex: '8',
   },
 ];
 
@@ -1331,6 +1517,36 @@ export class TrendingService {
       strapline: 'Punjabi',
       type: 'DEFAULT',
       items: PUNJABI_ITEMS,
+    };
+  }
+
+  public getHipHopShelf(): HomeShelf {
+    return {
+      title: 'Hip-Hop & Rap Heavyweights',
+      subtitle: 'Hanumankind, Kendrick Lamar, Eminem, Travis Scott & Drake',
+      strapline: 'Hip-Hop',
+      type: 'DEFAULT',
+      items: HIPHOP_ITEMS,
+    };
+  }
+
+  public getChillLofiShelf(): HomeShelf {
+    return {
+      title: 'Chill & Lo-Fi Vibes',
+      subtitle: 'Late night lo-fi beats, gentle acoustics & emotional melodies',
+      strapline: 'Chill',
+      type: 'DEFAULT',
+      items: CHILL_LOFI_ITEMS,
+    };
+  }
+
+  public getEdmShelf(): HomeShelf {
+    return {
+      title: 'EDM & Dance Festival',
+      subtitle: 'Alan Walker, Calvin Harris, Avicii, David Guetta & Martin Garrix',
+      strapline: 'EDM & Dance',
+      type: 'DEFAULT',
+      items: EDM_ITEMS,
     };
   }
 
@@ -1991,6 +2207,9 @@ export class TrendingService {
       BOLLYWOOD_ITEMS,
       PUNJABI_ITEMS,
       ENGLISH_GLOBAL_ITEMS,
+      HIPHOP_ITEMS,
+      CHILL_LOFI_ITEMS,
+      EDM_ITEMS,
       NEW_RELEASES_ITEMS,
       MUSIC_VIDEO_ITEMS,
       COVERS_REMIXES_ITEMS,

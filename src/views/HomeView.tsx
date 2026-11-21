@@ -164,6 +164,12 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenDetail }) => {
       return;
     }
 
+    // If mqdefault failed, try standard default.jpg
+    if (currentSrc.includes('mqdefault.jpg')) {
+      target.src = currentSrc.replace('mqdefault.jpg', 'default.jpg');
+      return;
+    }
+
     // High quality stylish SVG fallback with song initial, dark theme, and red accent
     const cleanInitial = encodeURIComponent((title || 'Song').trim().slice(0, 2).toUpperCase());
     target.src = `https://ui-avatars.com/api/?name=${cleanInitial}&background=201524&color=FA2D48&size=500&font-size=0.36&bold=true`;

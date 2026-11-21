@@ -354,6 +354,21 @@ export class InnertubeService {
       if (!hasPunjabi) {
         homeFeed.shelves.push(trendingService.getPunjabiShelf());
       }
+
+      const hasHipHop = homeFeed.shelves.some((s) => /hip-hop|rap/i.test(s.title));
+      if (!hasHipHop) {
+        homeFeed.shelves.push(trendingService.getHipHopShelf());
+      }
+
+      const hasChill = homeFeed.shelves.some((s) => /chill|lo-fi/i.test(s.title));
+      if (!hasChill) {
+        homeFeed.shelves.push(trendingService.getChillLofiShelf());
+      }
+
+      const hasEdm = homeFeed.shelves.some((s) => /edm|dance/i.test(s.title));
+      if (!hasEdm) {
+        homeFeed.shelves.push(trendingService.getEdmShelf());
+      }
     }
 
     if (!params && historySongs.status === 'fulfilled' && historySongs.value.length > 0) {

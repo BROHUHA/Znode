@@ -33,7 +33,9 @@ export function cleanThumbnailUrl(url?: string | null, videoId?: string | null):
     // Fix known broken IDs or casing
     let fixedUrl = url
       .replace('VAdGW7QDJUI', 'VAdGW7QDJiU')
-      .replace('V9PVRfjEBTI', 'LK7-_dgAVQE');
+      .replace('kPa7bsKwL-8', 'kPa7bsKwL-c')
+      .replace('d5gf9dXHevw', 'V9PVRfjEBTI')
+      .replace('LK7-_dgAVQE', 'V9PVRfjEBTI');
 
     if (fixedUrl.includes('hqdefault.jpg')) {
       return fixedUrl.replace('hqdefault.jpg', 'mqdefault.jpg');

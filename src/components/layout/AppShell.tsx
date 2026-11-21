@@ -228,16 +228,11 @@ export const AppShell: React.FC = () => {
           )}
         </main>
 
-        {/* Top Fade Blur Layer (Progressive Glass Fade matching TopFadeBlur.kt) */}
+        {/* Top Fade Blur Layer (Pure transparent liquid glass blur) */}
         <div className="top-fade-blur" />
 
-        {/* Top Fade Scrim Layer (Eased glass gradient wash matching song autotheme) */}
-        <div
-          className="top-fade-scrim"
-          style={{
-            background: `linear-gradient(to bottom, ${activePalette.darkBase}ea 0%, ${activePalette.darkBase}88 45%, transparent 100%)`,
-          }}
-        />
+        {/* Top Fade Scrim Layer (Clean, transparent neutral glass fade) */}
+        <div className="top-fade-scrim" />
 
         {/* Floating FrostedTopBar over TopFadeBlur */}
         <FrostedTopBar

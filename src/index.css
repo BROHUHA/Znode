@@ -191,11 +191,10 @@ body {
   will-change: transform;
   background: linear-gradient(
     to bottom,
-    rgba(5, 5, 8, 0.88) 0%,
-    rgba(5, 5, 8, 0.72) 38%,
-    rgba(5, 5, 8, 0.35) 66%,
-    rgba(5, 5, 8, 0.10) 86%,
-    rgba(5, 5, 8, 0) 100%
+    rgba(0, 0, 0, 0.35) 0%,
+    rgba(0, 0, 0, 0.18) 42%,
+    rgba(0, 0, 0, 0.04) 75%,
+    transparent 100%
   );
 }
 
