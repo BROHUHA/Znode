@@ -465,15 +465,15 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
 
         {/* Right Side: Znode Music Logo on mobile / Menu Button on desktop */}
         <div className="relative pointer-events-auto flex items-center shrink-0 gap-2" ref={menuRef}>
-          {/* Mobile View: Authentic Branded Znode Music Logo (Round Liquid Glass Pill) */}
+          {/* Mobile View: Authentic Branded Znode Music Logo (Transparent White Liquid Glass Circle) */}
           <button
             onClick={() => setIsMenuOpen((prev) => !prev)}
-            className="md:hidden p-1 rounded-full liquid-glass-circle transition-all duration-200 cursor-pointer flex items-center justify-center active:scale-90 hover:scale-105 shadow-[0_4px_16px_rgba(250,45,72,0.35)] border border-white/25"
+            className="md:hidden w-10 h-10 rounded-full liquid-glass-circle transition-all duration-200 cursor-pointer flex items-center justify-center active:scale-90 hover:scale-105 border border-white/25"
             title="Znode Music (ZN) Menu"
             aria-label="Znode Music (ZN) Menu"
             aria-expanded={isMenuOpen}
           >
-            <YouTubeMusicLogo size={32} className="drop-shadow-[0_2px_8px_rgba(250,45,72,0.5)]" />
+            <YouTubeMusicLogo size={24} className="opacity-95 drop-shadow-[0_1px_4px_rgba(255,255,255,0.3)]" />
           </button>
 
           {/* Desktop/Tablet View: Clean Liquid Glass Menu Icon Button */}
