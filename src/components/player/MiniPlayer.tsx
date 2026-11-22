@@ -195,7 +195,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
       style={{
         transform: `translateX(${offsetX}px)`,
         transition: offsetX === 0 ? 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
-        boxShadow: `0 14px 40px -4px rgba(0,0,0,0.85), 0 0 24px ${accentColor}25`,
+        boxShadow: `inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.65), 0 14px 36px -4px rgba(0, 0, 0, 0.40), 0 0 20px ${accentColor}20`,
       }}
       className={`relative w-full h-[64px] rounded-full liquid-glass-surface px-3 sm:px-3.5 flex items-center justify-between cursor-pointer group active:scale-[0.99] transition-transform overflow-hidden shadow-2xl ${className}`}
     >

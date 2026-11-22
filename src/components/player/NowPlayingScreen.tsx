@@ -146,6 +146,9 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   const [isLyricsLoading, setIsLyricsLoading] = useState<boolean>(false);
   const [isSynced, setIsSynced] = useState<boolean>(true);
   const [activeLyricIndex, setActiveLyricIndex] = useState<number>(-1);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  const scrubberBarRef = useRef<HTMLDivElement>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [downloadedSongs, setDownloadedSongs] = useState<Set<string>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
@@ -678,7 +681,55 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
     return `-${mins}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const displayCurrentTime = isScrubbing && scrubTime !== null ? scrubTime : currentTime;
+  const progressPercent = duration > 0 ? (displayCurrentTime / duration) * 100 : 0;
+
+  const handleSeekPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const bar = scrubberBarRef.current;
+    if (!bar || duration <= 0) return;
+
+    try {
+      bar.setPointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+    setIsScrubbing(true);
+
+    const updateTimeFromPointer = (clientX: number) => {
+      const rect = bar.getBoundingClientRect();
+      const clickX = clientX - rect.left;
+      const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+      setScrubTime(ratio * duration);
+    };
+
+    updateTimeFromPointer(e.clientX);
+
+    const onPointerMove = (ev: PointerEvent) => {
+      updateTimeFromPointer(ev.clientX);
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      try {
+        bar.releasePointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+
+      const rect = bar.getBoundingClientRect();
+      const clickX = ev.clientX - rect.left;
+      const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+      const targetTime = ratio * duration;
+      seek(targetTime);
+      setIsScrubbing(false);
+      setScrubTime(null);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
 
   const containerClasses = isDocked
     ? 'hidden lg:flex flex-col w-[360px] xl:w-[410px] h-full liquid-glass-dock relative overflow-hidden shrink-0 z-20 select-none border-l border-white/10'
@@ -702,86 +753,98 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Apple Music Transparent Frosted BG Blending (Light/Translucent, Not Dark):
-           - Layer A: Full-bleed vibrant ambient color wash.
-           - Layer B: Vertically inverted (flipped) artwork reflection with high brightness.
-           - Layer C: Ultra-translucent light scrim preserving artwork colors and luminous glow. */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 select-none">
-        {/* Layer A: Full-bleed luminous ambient wash */}
+      {/* Background Container:
+          - Ambient base wash filling viewport.
+          - Top half: Unblurred upper artwork (hero thumbnail).
+          - Seam join: Feathered blur-blend bridge.
+          - Bottom half: Vertically mirrored reflection (transform: scaleY(-1)) overlapping underneath,
+            with crisp 34px blur, scale(1.18), soft seam fade, and rgba(0,0,0,0.35) dark scrim over controls. */}
+      <div className="absolute inset-0 flex flex-col overflow-hidden pointer-events-none z-0 select-none">
+        {/* Ambient base glow layer to ensure rich color underneath transitions */}
         <img
-          key={`wash-a-${currentSong?.videoId || artworkUrl}`}
+          key={`ambient-base-${currentSong?.videoId || artworkUrl}`}
           src={artworkUrl}
           alt=""
           aria-hidden="true"
           referrerPolicy="no-referrer"
           onError={handleArtworkError}
-          className="absolute inset-0 w-full h-full object-cover object-center filter blur-[42px] sm:blur-[55px] saturate-[170%] brightness-[0.88] scale-[1.25] animate-bg-crossfade"
+          className="absolute inset-0 w-full h-full object-cover object-center filter blur-[40px] saturate-[175%] brightness-[0.88] scale-125 -z-10 transition-opacity duration-700"
         />
 
-        {/* Layer B: Vertically inverted reflection in lower portion — crisp, vibrant, and translucent */}
+        {/* Top Half: Unblurred Upper Artwork */}
+        {(nowPlayingTab === 'PLAYER' || isDocked) ? (
+          <div className="relative w-full h-[50vh] sm:h-[52vh] max-h-[520px] shrink-0 overflow-hidden">
+            <img
+              key={`hero-${currentSong?.videoId || artworkUrl}`}
+              src={artworkUrl}
+              alt={currentSong.title}
+              referrerPolicy="no-referrer"
+              onError={handleArtworkError}
+              className="w-full h-full object-cover object-top animate-hero-fade"
+              style={{
+                maskImage:
+                  'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 48%, rgba(0,0,0,0.88) 64%, rgba(0,0,0,0.62) 76%, rgba(0,0,0,0.32) 88%, rgba(0,0,0,0.08) 96%, rgba(0,0,0,0) 100%)',
+                WebkitMaskImage:
+                  'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 48%, rgba(0,0,0,0.88) 64%, rgba(0,0,0,0.62) 76%, rgba(0,0,0,0.32) 88%, rgba(0,0,0,0.08) 96%, rgba(0,0,0,0) 100%)',
+              }}
+            />
+            {/* Top scrim for header legibility */}
+            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none" />
+          </div>
+        ) : (
+          <div className="relative w-full h-[50vh] sm:h-[52vh] max-h-[520px] shrink-0" />
+        )}
+
+        {/* Deep blur-blend join bridging top artwork and bottom reflection */}
+        {(nowPlayingTab === 'PLAYER' || isDocked) && (
+          <div
+            className="absolute inset-x-0 pointer-events-none z-[2]"
+            style={{
+              top: 'calc(50vh - 50px)',
+              height: '105px',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              maskImage:
+                'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+              WebkitMaskImage:
+                'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+            }}
+          />
+        )}
+
+        {/* Bottom Half: Mirrored reflection overlapping flush directly underneath */}
         <div
-          className="absolute inset-x-0 bottom-0 h-[65vh] overflow-hidden transition-all duration-700"
+          className="relative w-full flex-1 -mt-16 overflow-hidden"
           style={{
             maskImage:
-              'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 45%, rgba(0,0,0,0.95) 100%)',
+              'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 12%, rgba(0,0,0,1) 28%, rgba(0,0,0,1) 100%)',
             WebkitMaskImage:
-              'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 45%, rgba(0,0,0,0.95) 100%)',
+              'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 12%, rgba(0,0,0,1) 28%, rgba(0,0,0,1) 100%)',
           }}
         >
           <img
-            key={`wash-b-${currentSong?.videoId || artworkUrl}`}
+            key={`reflection-${currentSong?.videoId || artworkUrl}`}
             src={artworkUrl}
             alt=""
             aria-hidden="true"
             referrerPolicy="no-referrer"
             onError={handleArtworkError}
-            className="w-full h-full object-cover object-bottom filter blur-[26px] sm:blur-[34px] saturate-[180%] brightness-[0.86] animate-bg-crossfade"
+            className="w-full h-full object-cover object-top transition-opacity duration-500"
             style={{
-              transform: 'scaleY(-1) scaleX(1.2)',
-              transformOrigin: 'top center',
+              filter: 'blur(34px)',
+              WebkitFilter: 'blur(34px)',
+              transform: 'scaleY(-1) scale(1.18)',
+              WebkitTransform: 'scaleY(-1) scale(1.18)',
+              transformOrigin: 'center center',
             }}
           />
+          {/* Dark scrim over lower controls for text contrast */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.35)' }}
+          />
         </div>
-
-        {/* Layer C: Translucent, airy scrim — preserves the rich colored blur without black murkiness */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `linear-gradient(to bottom,
-              rgba(0, 0, 0, 0.18) 0%,
-              transparent 18%,
-              transparent 42%,
-              rgba(0, 0, 0, 0.04) 55%,
-              rgba(0, 0, 0, 0.14) 75%,
-              rgba(0, 0, 0, 0.28) 100%
-            )`,
-          }}
-        />
       </div>
-
-      {/* 3. Hero Artwork: Apple Music Full-Bleed Immersive Poster (Matching Reference Image)
-           Fills the upper ~50-52vh with bold cinematic presence.
-           Stays solid and crisp for the upper ~68%, then dissolves smoothly into the dark reflection below. */}
-      {(nowPlayingTab === 'PLAYER' || isDocked) && (
-        <div className="absolute top-0 left-0 right-0 h-[50vh] sm:h-[53vh] max-h-[520px] overflow-hidden pointer-events-none z-0">
-          <img
-            key={`hero-${currentSong?.videoId || artworkUrl}`}
-            src={artworkUrl}
-            alt={currentSong.title}
-            referrerPolicy="no-referrer"
-            onError={handleArtworkError}
-            className="w-full h-full object-cover object-top animate-hero-fade"
-            style={{
-              maskImage:
-                'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 68%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0.5) 88%, rgba(0,0,0,0.15) 96%, rgba(0,0,0,0) 100%)',
-              WebkitMaskImage:
-                'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 68%, rgba(0,0,0,0.85) 78%, rgba(0,0,0,0.5) 88%, rgba(0,0,0,0.15) 96%, rgba(0,0,0,0) 100%)',
-            }}
-          />
-          {/* Subtle top scrim for header legibility */}
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none" />
-        </div>
-      )}
 
       {/* 3B. Queue/Lyrics overlay — very light scrim preserving the warm ambient BG colors (on mobile full-screen overlay) */}
       {!isDocked && nowPlayingTab !== 'PLAYER' && (
@@ -1336,38 +1399,41 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
           </div>
         )}
 
-        {/* 4. Scrubber Bar with Played & Remaining Time — Theme-colored */}
-        <div className="w-full pt-1 pb-1">
+        {/* 4. Scrubber Bar with Played & Remaining Time — Apple Music style with glowing thumb knob */}
+        <div className="w-full pt-1.5 pb-1 select-none">
+          {/* Expanded touch target wrapper */}
           <div
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const clickX = e.clientX - rect.left;
-              const ratio = Math.max(0, Math.min(1, clickX / rect.width));
-              seek(ratio * duration);
-            }}
-            className="w-full h-1.5 hover:h-2 bg-white/20 rounded-full cursor-pointer relative group transition-all duration-150"
+            ref={scrubberBarRef}
+            onPointerDown={handleSeekPointerDown}
+            className="w-full py-2.5 -my-2 cursor-pointer relative group flex items-center"
           >
-            <div
-              className="h-full rounded-full transition-all duration-100 ease-out relative"
-              style={{
-                width: `${progressPercent}%`,
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}
-            >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.9)] opacity-0 group-hover:opacity-100 transition-opacity" />
+            {/* The background track bar */}
+            <div className="w-full h-2 rounded-full bg-white/25 group-hover:bg-white/30 relative">
+              {/* Filled completed section (solid pure white) */}
+              <div
+                className="h-full rounded-full bg-white relative transition-[width] duration-75 ease-out"
+                style={{
+                  width: `${Math.min(100, Math.max(0, progressPercent))}%`,
+                }}
+              >
+                {/* Circular White Thumb Knob with Radiant Ambient Glow */}
+                <div
+                  className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.95),0_0_4px_rgba(255,255,255,0.8)] transition-transform duration-100 group-hover:scale-110 group-active:scale-125 pointer-events-none"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Time row: 0:21 on left, -2:48 on right */}
-          <div className="flex justify-between items-center text-[11px] sm:text-xs font-medium text-white/55 mt-2 px-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatRemainingTime(duration - currentTime)}</span>
+          {/* Time row: 0:29 on left, -3:18 on right */}
+          <div className="flex justify-between items-center text-[11px] sm:text-xs font-medium text-white/60 mt-1 px-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <span>{formatTime(displayCurrentTime)}</span>
+            <span>{formatRemainingTime(duration - displayCurrentTime)}</span>
           </div>
         </div>
 
-        {/* 5. Main Playback Transport Controls — Apple Music style bold white glyphs */}
+        {/* 5. Main Playback Transport Controls — Modern double-triangle rewind & fast-forward glyphs matching reference */}
         <div className="flex items-center justify-center w-full py-1 gap-12 sm:gap-16">
-          {/* Previous Track — Skip Back (bar + triangle) */}
+          {/* Previous Track — Double Triangle Pointing Left (Rewind ◀◀) */}
           <button
             onClick={prev}
             className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
@@ -1375,15 +1441,17 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
           >
             <svg
               viewBox="0 0 28 28"
-              className="w-9 h-9 sm:w-10 sm:h-10 fill-white drop-shadow-[0_2px_6px_rgba(255,255,255,0.2)] shrink-0"
+              className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
               aria-hidden="true"
             >
-              <rect x="3" y="5" width="3" height="18" rx="1.5" />
-              <path d="M23 5.5a1.2 1.2 0 0 0-1.85-1.01L8.5 13a1.2 1.2 0 0 0 0 2.02l12.65 8.5A1.2 1.2 0 0 0 23 22.5V5.5z" />
+              {/* Left Triangle */}
+              <path d="M13 6.2a1.2 1.2 0 0 0-1.85-1.01L2.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
+              {/* Right Triangle */}
+              <path d="M25 6.2a1.2 1.2 0 0 0-1.85-1.01L14.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
             </svg>
           </button>
 
-          {/* Play / Pause — Large Bold White Glyph */}
+          {/* Play / Pause — Large Bold White Glyph with Smooth Rounded Bars / Triangle */}
           <button
             onClick={togglePlay}
             className="text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
@@ -1392,24 +1460,26 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
             {isPlaying ? (
               <svg
                 viewBox="0 0 28 28"
-                className="w-[60px] h-[60px] sm:w-[68px] sm:h-[68px] fill-white drop-shadow-[0_0_20px_rgba(255,255,255,0.35)] shrink-0"
+                className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] shrink-0"
                 aria-hidden="true"
               >
-                <rect x="6" y="4" width="5" height="20" rx="2" />
-                <rect x="17" y="4" width="5" height="20" rx="2" />
+                {/* Two smooth vertical rounded pill bars */}
+                <rect x="7" y="4" width="4.5" height="20" rx="2.25" />
+                <rect x="16.5" y="4" width="4.5" height="20" rx="2.25" />
               </svg>
             ) : (
               <svg
                 viewBox="0 0 28 28"
-                className="w-[60px] h-[60px] sm:w-[68px] sm:h-[68px] fill-white drop-shadow-[0_0_20px_rgba(255,255,255,0.35)] ml-1 shrink-0"
+                className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] ml-1 shrink-0"
                 aria-hidden="true"
               >
-                <path d="M7 4.2a1.5 1.5 0 0 1 2.3-1.27l14.4 9.3a1.5 1.5 0 0 1 0 2.54l-14.4 9.3A1.5 1.5 0 0 1 7 22.8V4.2z" />
+                {/* Solid rounded play triangle */}
+                <path d="M7 4.5a1.6 1.6 0 0 1 2.45-1.36l13.5 8.14a1.6 1.6 0 0 1 0 2.72l-13.5 8.14A1.6 1.6 0 0 1 7 20.78V4.5z" />
               </svg>
             )}
           </button>
 
-          {/* Next Track — Skip Forward (triangle + bar) */}
+          {/* Next Track — Double Triangle Pointing Right (Fast Forward ▶▶) */}
           <button
             onClick={next}
             className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
@@ -1417,11 +1487,13 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
           >
             <svg
               viewBox="0 0 28 28"
-              className="w-9 h-9 sm:w-10 sm:h-10 fill-white drop-shadow-[0_2px_6px_rgba(255,255,255,0.2)] shrink-0"
+              className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
               aria-hidden="true"
             >
-              <rect x="22" y="5" width="3" height="18" rx="1.5" />
-              <path d="M5 5.5a1.2 1.2 0 0 1 1.85-1.01L19.5 13a1.2 1.2 0 0 1 0 2.02L6.85 23.52A1.2 1.2 0 0 1 5 22.5V5.5z" />
+              {/* Left Triangle */}
+              <path d="M3 6.2a1.2 1.2 0 0 1 1.85-1.01L13.8 13a1.2 1.2 0 0 1 0 2.02L4.85 22.81A1.2 1.2 0 0 1 3 21.8V6.2z" />
+              {/* Right Triangle */}
+              <path d="M15 6.2a1.2 1.2 0 0 1 1.85-1.01L25.8 13a1.2 1.2 0 0 1 0 2.02L16.85 22.81A1.2 1.2 0 0 1 15 21.8V6.2z" />
             </svg>
           </button>
         </div>

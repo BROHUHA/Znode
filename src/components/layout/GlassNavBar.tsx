@@ -124,14 +124,14 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
 
           {/* Tab Row: [Home, Explore, Library pill] + [Search circle] */}
           <div className="flex items-center gap-2 w-full">
-            <div className="h-14 rounded-full liquid-glass-surface flex-1 px-2 flex items-center justify-around shadow-2xl">
+            <div className="h-14 rounded-full liquid-glass-surface flex-1 px-2 flex items-center justify-around shadow-2xl relative overflow-hidden">
               {tabs.map((tab) => {
                 const isActive = currentTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => onSelectTab(tab.id)}
-                    className={`flex flex-col items-center justify-center py-1 px-3 rounded-full transition-all duration-150 cursor-pointer ${
+                    className={`relative z-10 flex flex-col items-center justify-center py-1 px-3 rounded-full transition-all duration-150 cursor-pointer ${
                       isActive
                         ? 'text-white scale-105 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] font-bold'
                         : 'text-white/60 hover:text-white active:scale-95 font-medium'
@@ -151,7 +151,7 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
             {/* Standalone Search Circle */}
             <button
               onClick={() => onSelectTab('search')}
-              className={`w-14 h-14 rounded-full liquid-glass-surface flex items-center justify-center shrink-0 active:scale-90 transition-transform duration-150 cursor-pointer shadow-2xl ${
+              className={`w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 active:scale-90 transition-transform duration-150 cursor-pointer shadow-2xl ${
                 isSearchActive
                   ? 'text-white ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.25)]'
                   : 'text-white/75 hover:text-white'
@@ -159,7 +159,9 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
               title="Search"
               aria-label="Search"
             >
-              {renderTabIcon('search', isSearchActive)}
+              <div className="relative z-10 w-6 h-6 flex items-center justify-center">
+                {renderTabIcon('search', isSearchActive)}
+              </div>
             </button>
           </div>
         </div>
@@ -178,11 +180,11 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
           {/* InlineTab: Single Active Tab Circle (Tap to expand) */}
           <button
             onClick={onExpand}
-            className="w-14 h-14 rounded-full liquid-glass-surface flex items-center justify-center shrink-0 cursor-pointer active:scale-90 hover:scale-105 shadow-2xl transition-transform duration-150"
+            className="w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 cursor-pointer active:scale-90 hover:scale-105 shadow-2xl transition-transform duration-150"
             title="Tap to expand navigation tabs"
             aria-label="Expand tabs"
           >
-            <div className="w-6 h-6 flex items-center justify-center text-white scale-105 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+            <div className="relative z-10 w-6 h-6 flex items-center justify-center text-white scale-105 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
               {renderTabIcon(currentTab === 'search' ? 'home' : currentTab, true)}
             </div>
           </button>
@@ -196,7 +198,7 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
               onExpand();
               onSelectTab('search');
             }}
-            className={`w-14 h-14 rounded-full liquid-glass-surface flex items-center justify-center shrink-0 active:scale-90 transition-transform duration-150 cursor-pointer shadow-2xl ${
+            className={`w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 active:scale-90 transition-transform duration-150 cursor-pointer shadow-2xl ${
               isSearchActive
                 ? 'text-white ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.25)]'
                 : 'text-white/75 hover:text-white'
@@ -204,7 +206,9 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
             title="Search"
             aria-label="Search"
           >
-            {renderTabIcon('search', isSearchActive)}
+            <div className="relative z-10 w-6 h-6 flex items-center justify-center">
+              {renderTabIcon('search', isSearchActive)}
+            </div>
           </button>
         </div>
       </div>

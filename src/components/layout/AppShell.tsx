@@ -463,6 +463,20 @@ export const AppShell: React.FC = () => {
         {/* Mobile Bottom Fade Scrim: Dissolves scrolling items smoothly above bottom navigation */}
         <div className="md:hidden bottom-fade-scrim" />
 
+        {/* Real Edge Refraction SVG Displacement Map (Chromium/WebGL lens warping filter) */}
+        <svg
+          className="sr-only"
+          aria-hidden="true"
+          style={{ position: 'fixed', width: 0, height: 0, pointerEvents: 'none' }}
+        >
+          <defs>
+            <filter id="refract" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
+              <feTurbulence type="fractalNoise" baseFrequency="0.015 0.04" numOctaves="2" result="noise" />
+              <feDisplacementMap in="SourceGraphic" in2="noise" scale="8" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+            </filter>
+          </defs>
+        </svg>
+
         {/* Mobile Liquid Glass Navigation Bar with Integrated Expand/Shrink Player */}
         <GlassNavBar
           currentTab={currentTab}
