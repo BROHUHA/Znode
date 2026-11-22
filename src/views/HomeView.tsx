@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { HomeShelf, ShelfItem, HomeChip, Song } from '../types';
 import { innertubeService } from '../services/innertube';
 import { trendingService, DEFAULT_HOME_CHIPS } from '../services/trendingService';
+import { feedCache } from '../services/feedCache';
 import { cleanThumbnailUrl } from '../utils/thumbnail';
 import { usePlayerStore } from '../stores/playerStore';
 import { useAuthStore } from '../stores/authStore';
@@ -36,33 +37,71 @@ function cleanArtistFromSubtitle(subtitle: string): string {
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ onOpenDetail }) => {
-  const [shelves, setShelves] = useState<HomeShelf[]>([]);
-  const [allShelves, setAllShelves] = useState<HomeShelf[]>([]);
-  const [chips, setChips] = useState<HomeChip[]>(DEFAULT_HOME_CHIPS);
+  const cachedFeed = feedCache.loadHomeFeedCache();
+  const initialShelves = cachedFeed?.shelves?.length
+    ? cachedFeed.shelves
+    : [
+        trendingService.getQuickPicksShelf(),
+        trendingService.getTimeOfDayShelf(),
+        trendingService.getHitsShelf(),
+      ];
+
+  const [shelves, setShelves] = useState<HomeShelf[]>(initialShelves);
+  const [allShelves, setAllShelves] = useState<HomeShelf[]>(initialShelves);
+  const [chips, setChips] = useState<HomeChip[]>(cachedFeed?.chips || DEFAULT_HOME_CHIPS);
   const [activeChip, setActiveChip] = useState<string>('all');
-  const [continuation, setContinuation] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [continuation, setContinuation] = useState<string | null>(cachedFeed?.continuation || null);
+  const [loading, setLoading] = useState<boolean>(!cachedFeed?.shelves?.length);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const { playSong, setQueue } = usePlayerStore();
   const { isSignedIn, feedRefreshTrigger } = useAuthStore();
   const observerTarget = useRef<HTMLDivElement>(null);
   const quickPicksScrollRef = useRef<HTMLDivElement>(null);
 
-  // Initial load
+  // Initial load: 0ms instant SWR hydration + background revalidation
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
+    if (!cachedFeed?.shelves?.length) {
+      setLoading(true);
+    }
     innertubeService
       .getHome()
       .then((data) => {
         if (!isMounted) return;
-        setShelves(data.shelves);
-        setAllShelves(data.shelves);
+
+        const enrichedShelves = [...data.shelves];
+        // Inject or replace with personalized Quick Picks
+        const qpIdx = enrichedShelves.findIndex(
+          (s) => s.type === 'QUICK_PICKS' || s.title?.toLowerCase().includes('quick picks')
+        );
+        const dynamicQp = trendingService.getQuickPicksShelf();
+        if (qpIdx >= 0) {
+          enrichedShelves[qpIdx] = dynamicQp;
+        } else {
+          enrichedShelves.unshift(dynamicQp);
+        }
+
+        // Inject time-of-day contextual shelf if not already present
+        const timeShelf = trendingService.getTimeOfDayShelf();
+        const hasTimeShelf = enrichedShelves.some((s) => s.title === timeShelf.title);
+        if (!hasTimeShelf) {
+          enrichedShelves.splice(1, 0, timeShelf);
+        }
+
+        setShelves(enrichedShelves);
+        setAllShelves(enrichedShelves);
         if (data.chips && data.chips.length > 0) {
           setChips(data.chips);
         }
         setContinuation(data.continuation);
         setLoading(false);
+
+        // Cache for subsequent 0ms cold starts
+        feedCache.saveHomeFeedCache({
+          shelves: enrichedShelves,
+          chips: data.chips,
+          continuation: data.continuation,
+        });
       })
       .catch((err) => {
         console.error('Failed to load Home feed', err);
@@ -170,9 +209,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenDetail }) => {
       return;
     }
 
-    // High quality stylish SVG fallback with song initial, dark theme, and red accent
-    const cleanInitial = encodeURIComponent((title || 'Song').trim().slice(0, 2).toUpperCase());
-    target.src = `https://ui-avatars.com/api/?name=${cleanInitial}&background=201524&color=FA2D48&size=500&font-size=0.36&bold=true`;
+    // High quality stylish SVG fallback with song initial, dark theme, and red accent (inline SVG data URL to avoid external network dependencies)
+    const cleanInitial = (title || 'Song').trim().slice(0, 2).toUpperCase() || '♪';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 500 500"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2a1628"/><stop offset="100%" stop-color="#140d16"/></linearGradient></defs><rect width="500" height="500" fill="url(#g)" rx="24"/><text x="50%" y="54%" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="140" fill="#FA2D48" text-anchor="middle" dominant-baseline="middle">${cleanInitial}</text></svg>`;
+    target.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   };
 
   const loadMoreShelves = useCallback(() => {

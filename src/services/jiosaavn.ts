@@ -5,6 +5,7 @@
  */
 
 import CryptoJS from 'crypto-js';
+import { TrackMatcher, CandidateTrack, TargetTrack } from '../utils/trackMatcher';
 
 const DES_KEY = '38346591'; // 8-byte DES key
 const BASE_URL = '/api/jiosaavn';
@@ -16,6 +17,7 @@ export interface SaavnSong {
   image: string;
   streamUrl: string | null;
   bitrate: number;
+  durationSec: number;
 }
 
 export class JioSaavnService {
@@ -122,6 +124,7 @@ export class JioSaavnService {
           image: (item.image || '').replace('150x150', '500x500'),
           streamUrl: stream?.url || null,
           bitrate: stream?.bitrate || 320,
+          durationSec: parseInt(moreInfo.duration || item.duration || '0', 10),
         };
       });
     } catch (e) {
@@ -131,13 +134,24 @@ export class JioSaavnService {
   }
 
   /**
-   * Matches YouTube Song against JioSaavn to find high-bitrate 320kbps stream
+   * Matches YouTube Song against JioSaavn to find high-bitrate 320kbps stream.
+   * Strictly verified via TrackMatcher to completely eliminate wrong-song playback.
    */
-  public async findMatch(title: string, artist: string): Promise<string | null> {
-    const cacheKey = `${title}__${artist}`.toLowerCase();
+  public async findMatch(
+    title: string,
+    artist: string,
+    durationSec?: number | null
+  ): Promise<string | null> {
+    const cacheKey = `${title}__${artist}__${durationSec || 0}`.toLowerCase();
     if (this.matchCache.has(cacheKey)) {
       return this.matchCache.get(cacheKey) || null;
     }
+
+    const target: TargetTrack = {
+      title,
+      artist,
+      durationSec: durationSec || null,
+    };
 
     const cleanTitle = title
       .replace(/\([^)]*\)/g, '')
@@ -158,36 +172,65 @@ export class JioSaavnService {
       .trim();
 
     // 1. Try search with title and artist
+    let candidates: CandidateTrack[] = [];
     if (cleanTitle && cleanArtist) {
       const results = await this.search(`${cleanTitle} ${cleanArtist}`);
-      const match = results.find((r) => r.streamUrl);
-      if (match?.streamUrl) {
-        this.matchCache.set(cacheKey, match.streamUrl);
-        return match.streamUrl;
+      candidates = results.map((r) => ({
+        id: r.id,
+        title: r.title,
+        artist: r.artist,
+        durationSec: r.durationSec,
+        streamUrl: r.streamUrl,
+        bitrate: r.bitrate,
+      }));
+
+      const verified = TrackMatcher.best(candidates, target);
+      if (verified?.streamUrl) {
+        this.matchCache.set(cacheKey, verified.streamUrl);
+        return verified.streamUrl;
       }
     }
 
-    // 2. Try title only if artist query was too specific
+    // 2. Try title only if artist query was too specific, but STILL enforce TrackMatcher
     if (cleanTitle) {
       const results = await this.search(cleanTitle);
-      const match = results.find((r) => r.streamUrl);
-      if (match?.streamUrl) {
-        this.matchCache.set(cacheKey, match.streamUrl);
-        return match.streamUrl;
+      candidates = results.map((r) => ({
+        id: r.id,
+        title: r.title,
+        artist: r.artist,
+        durationSec: r.durationSec,
+        streamUrl: r.streamUrl,
+        bitrate: r.bitrate,
+      }));
+
+      const verified = TrackMatcher.best(candidates, target);
+      if (verified?.streamUrl) {
+        this.matchCache.set(cacheKey, verified.streamUrl);
+        return verified.streamUrl;
       }
     }
 
-    // 3. Try primary title segment (before any hyphen or delimiter)
+    // 3. Try primary title segment (before any hyphen or delimiter) with TrackMatcher
     const shortTitle = title.split(/[-–—(|[]/)[0].trim();
     if (shortTitle && shortTitle !== cleanTitle) {
       const results = await this.search(shortTitle);
-      const match = results.find((r) => r.streamUrl);
-      if (match?.streamUrl) {
-        this.matchCache.set(cacheKey, match.streamUrl);
-        return match.streamUrl;
+      candidates = results.map((r) => ({
+        id: r.id,
+        title: r.title,
+        artist: r.artist,
+        durationSec: r.durationSec,
+        streamUrl: r.streamUrl,
+        bitrate: r.bitrate,
+      }));
+
+      const verified = TrackMatcher.best(candidates, target);
+      if (verified?.streamUrl) {
+        this.matchCache.set(cacheKey, verified.streamUrl);
+        return verified.streamUrl;
       }
     }
 
+    // Absolutely NO unverified fallback! Reject and return null.
     this.matchCache.set(cacheKey, null);
     return null;
   }

@@ -90,29 +90,53 @@ export class LyricsService {
           innertubeFallbackText = innertubeRes.text;
         }
       } catch (e) {
-        // Fallback to LRCLIB
+        // Fallback
       }
     }
 
-    // 2. Try LRCLib exact match with duration
+    // 2. Try SimpMusic API by exact YouTube videoId (exact 100% track match)
+    if (videoId) {
+      const simpLyrics = await this.fetchSimpMusic(videoId);
+      if (simpLyrics && simpLyrics.lines.length > 0) {
+        this.cache.set(cacheKey, simpLyrics);
+        return simpLyrics;
+      }
+    }
+
+    // 3. Try BetterLyrics API (Apple Music syllable/line synced TTML/LRC)
+    const betterLyrics = await this.fetchBetterLyrics(cleanT, cleanA, durationSec);
+    if (betterLyrics && betterLyrics.lines.length > 0) {
+      this.cache.set(cacheKey, betterLyrics);
+      return betterLyrics;
+    }
+
+    // 4. Try LRCLib exact match with duration
     let lyricsData = await this.fetchLrcLibExact(cleanT, cleanA, durationSec);
 
-    // 3. Try LRCLib exact match WITHOUT duration (strict duration in /api/get often 404s due to minor diff)
+    // 5. Try LRCLib exact match WITHOUT duration (strict duration in /api/get often 404s due to minor diff)
     if (!lyricsData || !lyricsData.lines.length) {
       lyricsData = await this.fetchLrcLibExact(cleanT, cleanA, 0);
     }
 
-    // 4. Fallback: LRCLib search with track_name and artist_name
+    // 6. Fallback: LRCLib search with track_name and artist_name
     if (!lyricsData || !lyricsData.lines.length) {
       lyricsData = await this.searchLrcLibTrackArtist(cleanT, cleanA, durationSec);
     }
 
-    // 5. Fallback: LRCLib search query with clean title and artist
+    // 7. Fallback: JioSaavn regional lyrics for Indian language tracks
+    if (!lyricsData || !lyricsData.lines.length) {
+      const saavnLyrics = await this.fetchJioSaavnLyrics(cleanT, cleanA, durationSec);
+      if (saavnLyrics && saavnLyrics.lines.length > 0) {
+        lyricsData = saavnLyrics;
+      }
+    }
+
+    // 8. Fallback: LRCLib search query with clean title and artist
     if (!lyricsData || !lyricsData.lines.length) {
       lyricsData = await this.searchLrcLib(`${cleanT} ${cleanA}`, durationSec);
     }
 
-    // 6. Fallback: LRCLib search with clean title only
+    // 9. Fallback: LRCLib search with clean title only
     if (!lyricsData || !lyricsData.lines.length) {
       lyricsData = await this.searchLrcLib(cleanT, durationSec);
     }
@@ -367,6 +391,238 @@ export class LyricsService {
     }
 
     return deduplicated;
+  }
+
+  private parseTtmlTime(timeStr: string): number {
+    if (!timeStr) return 0;
+    const str = timeStr.trim();
+    if (str.endsWith('s')) {
+      const val = parseFloat(str.slice(0, -1));
+      return isNaN(val) ? 0 : Math.round(val * 1000);
+    }
+    const parts = str.split(':');
+    if (parts.length === 2) {
+      const mins = parseFloat(parts[0]);
+      const secs = parseFloat(parts[1]);
+      return Math.round((mins * 60 + secs) * 1000);
+    }
+    if (parts.length === 3) {
+      const hours = parseFloat(parts[0]);
+      const mins = parseFloat(parts[1]);
+      const secs = parseFloat(parts[2]);
+      return Math.round((hours * 3600 + mins * 60 + secs) * 1000);
+    }
+    const val = parseFloat(str);
+    return isNaN(val) ? 0 : Math.round(val * 1000);
+  }
+
+  /**
+   * Parse TTML syllable/line synchronized markup (e.g. from BetterLyrics / Apple Music)
+   */
+  public parseTtml(ttml: string): LyricLine[] {
+    const pRegex = /<p\s+[^>]*begin="([^"]+)"(?:[^>]*end="([^"]+)")?[^>]*>([\s\S]*?)<\/p>/gi;
+    const lines: LyricLine[] = [];
+    let match;
+    while ((match = pRegex.exec(ttml)) !== null) {
+      const beginStr = match[1];
+      const endStr = match[2];
+      const rawHtml = match[3];
+      const words = rawHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+      if (!words) continue;
+      const startTimeMs = this.parseTtmlTime(beginStr);
+      const endTimeMs = endStr ? this.parseTtmlTime(endStr) : startTimeMs + 4000;
+      lines.push({ startTimeMs, endTimeMs, words });
+    }
+    lines.sort((a, b) => a.startTimeMs - b.startTimeMs);
+    return lines;
+  }
+
+  /**
+   * Fetches lyrics from SimpMusic API by YouTube videoId (exact 1-to-1 match)
+   */
+  private async fetchSimpMusic(videoId: string): Promise<LyricsData | null> {
+    if (!videoId) return null;
+    const endpoints = [
+      `/api/simpmusic/${videoId}`,
+      `https://api-lyrics.simpmusic.org/v1/${videoId}`,
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(ep, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+          },
+        });
+        clearTimeout(timeout);
+        if (!res.ok) continue;
+
+        const data = await res.json();
+        // 1. Array of lyric objects
+        if (Array.isArray(data) && data.length > 0) {
+          const lines: LyricLine[] = data
+            .map((item: any, idx: number) => ({
+              startTimeMs:
+                item.startTimeMs || (item.time ? Math.round(item.time * 1000) : idx * 4000),
+              endTimeMs: item.endTimeMs || (item.endTime ? Math.round(item.endTime * 1000) : 0),
+              words: item.words || item.text || item.line || '',
+            }))
+            .filter((l) => l.words.trim().length > 0);
+
+          if (lines.length > 0) {
+            return {
+              source: 'SIMPMUSIC',
+              synced: true,
+              lines,
+            };
+          }
+        }
+
+        // 2. Synced lyrics string
+        if (data.syncedLyrics && typeof data.syncedLyrics === 'string') {
+          const lines = this.parseLrc(data.syncedLyrics);
+          if (lines.length > 0) {
+            return {
+              source: 'SIMPMUSIC',
+              synced: true,
+              lines,
+            };
+          }
+        }
+
+        // 3. Plain lyrics string
+        if (data.plainLyrics && typeof data.plainLyrics === 'string') {
+          const lines = this.parsePlainLyrics(data.plainLyrics);
+          if (lines.length > 0) {
+            return {
+              source: 'SIMPMUSIC',
+              synced: false,
+              lines,
+            };
+          }
+        }
+      } catch (e) {
+        // Continue
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Fetches lyrics from BetterLyrics (Apple Music TTML / LRC)
+   */
+  private async fetchBetterLyrics(
+    title: string,
+    artist: string,
+    durationSec: number
+  ): Promise<LyricsData | null> {
+    const endpoints = [
+      `/api/betterlyrics/getLyrics?s=${encodeURIComponent(title)}&a=${encodeURIComponent(artist)}${durationSec > 0 ? `&d=${Math.round(durationSec)}` : ''}`,
+      `https://lyrics-api.boidu.dev/getLyrics?s=${encodeURIComponent(title)}&a=${encodeURIComponent(artist)}${durationSec > 0 ? `&d=${Math.round(durationSec)}` : ''}`,
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(ep, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+          },
+        });
+        clearTimeout(timeout);
+        if (!res.ok) continue;
+
+        const data = await res.json();
+        if (data.ttml && typeof data.ttml === 'string') {
+          const lines = this.parseTtml(data.ttml);
+          if (lines.length > 0) {
+            return {
+              source: 'BETTER_LYRICS',
+              synced: true,
+              hasSyllables: true,
+              lines,
+            };
+          }
+        }
+        if (data.lrc && typeof data.lrc === 'string') {
+          const lines = this.parseLrc(data.lrc);
+          if (lines.length > 0) {
+            return {
+              source: 'BETTER_LYRICS',
+              synced: true,
+              lines,
+            };
+          }
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Fetches lyrics from JioSaavn for Indian regional music (Hindi, Malayalam, Tamil, Telugu, Punjabi)
+   */
+  private async fetchJioSaavnLyrics(
+    title: string,
+    artist: string,
+    durationSec: number
+  ): Promise<LyricsData | null> {
+    try {
+      const q = encodeURIComponent(`${title} ${artist}`.trim());
+      const searchRes = await fetch(
+        `/api/jiosaavn?__call=autocomplete.get&query=${q}&_format=json&_marker=0&ctx=web6dot0`
+      );
+      if (!searchRes.ok) return null;
+      const data = await searchRes.json();
+      const songs = data?.songs?.data;
+      if (!Array.isArray(songs) || songs.length === 0) return null;
+
+      const match = songs.find((s: any) => s.has_lyrics === 'true' || s.lyrics_id || s.id);
+      if (!match) return null;
+
+      const songId = match.id;
+      const detailsRes = await fetch(
+        `/api/jiosaavn?__call=song.getDetails&pids=${songId}&_format=json&_marker=0&ctx=web6dot0`
+      );
+      if (!detailsRes.ok) return null;
+      const details = await detailsRes.json();
+      const songData = details[songId] || details;
+      const lyricsId = songData?.lyrics_id || songId;
+
+      if (songData?.has_lyrics === 'true' || lyricsId) {
+        const lyricsRes = await fetch(
+          `/api/jiosaavn?__call=lyrics.getLyrics&lyrics_id=${lyricsId}&_format=json&_marker=0&ctx=web6dot0`
+        );
+        if (lyricsRes.ok) {
+          const lyricsJson = await lyricsRes.json();
+          if (lyricsJson?.lyrics) {
+            const cleanText = lyricsJson.lyrics
+              .replace(/<br\s*\/?>/gi, '\n')
+              .replace(/<[^>]+>/g, '')
+              .trim();
+            if (cleanText) {
+              return {
+                source: 'JIOSAAVN',
+                synced: true,
+                lines: this.parsePlainLyrics(cleanText, durationSec),
+              };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Fallback
+    }
+    return null;
   }
 
   /**

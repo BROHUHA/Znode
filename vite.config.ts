@@ -428,6 +428,24 @@ export default defineConfig({
           'User-Agent': 'ZnodeMusicWeb/1.6.2 (https://github.com/abin/znode-music-web)',
         },
       },
+      // SimpMusic Lyrics Proxy (exact YouTube Music videoId lyrics)
+      '/api/simpmusic': {
+        target: 'https://api-lyrics.simpmusic.org/v1',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/simpmusic/, ''),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+        },
+      },
+      // BetterLyrics Proxy (Apple Music synced TTML/LRC)
+      '/api/betterlyrics': {
+        target: 'https://lyrics-api.boidu.dev',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/betterlyrics/, ''),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+        },
+      },
     },
   },
 });

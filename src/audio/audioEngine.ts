@@ -59,6 +59,12 @@ export class AudioEngine {
   private currentPlayingVideoId: string | null = null;
   private isAdMuted: boolean = false;
 
+  // HTML5 Stall Detection: auto-recover to YouTube when CDN stream freezes
+  private stallDetectorHandle: any = null;
+  private lastTimeUpdateAt: number = 0;
+  private lastTimeUpdateValue: number = -1;
+  private stallRecoveryAttempted: boolean = false;
+
   // Preload & Advance Download Engine for Instant 0ms Fast Track Switching
   private preloadAudio: HTMLAudioElement;
   private preloadedStreamUrl: string | null = null;
@@ -138,7 +144,27 @@ export class AudioEngine {
   }
 
   private initYouTubePlayer() {
-    if (this.ytPlayer || !window.YT || !window.YT.Player) return;
+    // Allow re-creation if ytPlayer was constructed but onReady never fired
+    if (this.ytReady || !window.YT || !window.YT.Player) return;
+
+    // If a previous player object exists but never became ready, destroy it first
+    if (this.ytPlayer && !this.ytReady) {
+      try {
+        if (typeof this.ytPlayer.destroy === 'function') {
+          this.ytPlayer.destroy();
+        }
+      } catch {}
+      this.ytPlayer = null;
+
+      // Re-create the container div since YT.Player replaces it with an iframe
+      const existing = document.getElementById('yt-audio-player');
+      if (!existing) {
+        const parent = document.querySelector('.yt-audio-container') || document.body;
+        const div = document.createElement('div');
+        div.id = 'yt-audio-player';
+        parent.appendChild(div);
+      }
+    }
 
     const container = document.getElementById('yt-audio-player');
     if (!container) return;
@@ -200,7 +226,10 @@ export class AudioEngine {
             }
           },
           onError: (err: any) => {
-            console.warn('YouTube Player error code:', err?.data, err);
+            const code = err?.data;
+            console.warn('YouTube Player error code:', code, err);
+            // Error codes: 2=invalid param, 5=HTML5 error, 100=not found, 101/150=restricted embed
+            // Always fire the error callback so playerStore can handle recovery
             if (this.onErrorCallback) this.onErrorCallback(err);
           },
         },
@@ -214,11 +243,35 @@ export class AudioEngine {
     this.mode = 'YOUTUBE';
     this.currentPlayingVideoId = videoId;
     this.isAdMuted = false;
+    this.stopStallDetector();
     this.audio.pause();
+    this.audio.removeAttribute('src');
 
     if (!this.ytReady || !this.ytPlayer || typeof this.ytPlayer.loadVideoById !== 'function') {
       this.ytPendingVideoId = videoId;
       this.ytPendingStartTime = startTime;
+
+      // If YT player isn't ready yet, try to init it and wait up to 8s
+      this.initYouTubePlayer();
+      await new Promise<void>((resolve) => {
+        let waited = 0;
+        const check = setInterval(() => {
+          waited += 100;
+          if (this.ytReady && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+            clearInterval(check);
+            // The onReady handler will have already played the pending video
+            resolve();
+          } else if (waited >= 8000) {
+            clearInterval(check);
+            console.warn('YouTube IFrame player not ready after 8s for', videoId);
+            // Fire error callback so playerStore can auto-skip
+            if (this.onErrorCallback) {
+              this.onErrorCallback({ data: -1, message: 'YT player init timeout' });
+            }
+            resolve();
+          }
+        }, 100);
+      });
       return;
     }
 
@@ -379,26 +432,40 @@ export class AudioEngine {
 
   private setupHtml5Listeners() {
     this.audio.addEventListener('timeupdate', () => {
-      if (this.mode === 'HTML5' && this.onTimeUpdateCallback) {
-        this.onTimeUpdateCallback(this.audio.currentTime, this.audio.duration || 0);
+      if (this.mode === 'HTML5') {
+        // Update stall detector: stream is alive
+        this.lastTimeUpdateAt = Date.now();
+        this.lastTimeUpdateValue = this.audio.currentTime;
+        if (this.onTimeUpdateCallback) {
+          this.onTimeUpdateCallback(this.audio.currentTime, this.audio.duration || 0);
+        }
       }
     });
 
     this.audio.addEventListener('play', () => {
-      if (this.mode === 'HTML5' && this.onPlayStateChangeCallback) {
-        this.onPlayStateChangeCallback(true);
+      if (this.mode === 'HTML5') {
+        this.startStallDetector();
+        if (this.onPlayStateChangeCallback) {
+          this.onPlayStateChangeCallback(true);
+        }
       }
     });
 
     this.audio.addEventListener('pause', () => {
-      if (this.mode === 'HTML5' && this.onPlayStateChangeCallback) {
-        this.onPlayStateChangeCallback(false);
+      if (this.mode === 'HTML5') {
+        this.stopStallDetector();
+        if (this.onPlayStateChangeCallback) {
+          this.onPlayStateChangeCallback(false);
+        }
       }
     });
 
     this.audio.addEventListener('ended', () => {
-      if (this.mode === 'HTML5' && this.onEndedCallback) {
-        this.onEndedCallback();
+      if (this.mode === 'HTML5') {
+        this.stopStallDetector();
+        if (this.onEndedCallback) {
+          this.onEndedCallback();
+        }
       }
     });
 
@@ -408,12 +475,78 @@ export class AudioEngine {
       }
     });
 
-    this.audio.addEventListener('error', (e) => {
-      console.warn('HTML5 audio error', e);
-      if (this.mode === 'HTML5' && this.onErrorCallback) {
-        this.onErrorCallback(e);
+    // 'stalled' fires when the browser is trying to fetch but getting no data
+    this.audio.addEventListener('stalled', () => {
+      if (this.mode === 'HTML5') {
+        console.warn('HTML5 audio stalled event — stream download interrupted');
+        // Give it 5 seconds to recover before switching to YouTube
+        this.lastTimeUpdateAt = Date.now();
       }
     });
+
+    // 'waiting' fires when playback stopped due to lack of buffered data
+    this.audio.addEventListener('waiting', () => {
+      if (this.mode === 'HTML5') {
+        console.warn('HTML5 audio waiting event — buffering');
+      }
+    });
+
+    this.audio.addEventListener('error', (e) => {
+      console.warn('HTML5 audio error event triggered:', e);
+      if (this.mode === 'HTML5') {
+        this.stopStallDetector();
+        // Auto-recover: switch to YouTube IFrame player for the same videoId
+        if (this.currentPlayingVideoId) {
+          console.log('Auto-recovering to YouTube player for videoId:', this.currentPlayingVideoId);
+          this.playVideo(this.currentPlayingVideoId, 0).catch(console.error);
+        }
+        // Note: do NOT also fire onErrorCallback here — audioEngine already handles recovery.
+        // The playerStore onError handler was causing a redundant double-fallback.
+      }
+    });
+  }
+
+  /**
+   * Stall Detector: monitors HTML5 audio for frozen streams.
+   * If currentTime hasn't advanced for 5 seconds while not paused,
+   * the CDN stream is dead — auto-recover to YouTube IFrame.
+   */
+  private startStallDetector() {
+    this.stopStallDetector();
+    this.lastTimeUpdateAt = Date.now();
+    this.lastTimeUpdateValue = this.audio.currentTime;
+    this.stallRecoveryAttempted = false;
+
+    this.stallDetectorHandle = setInterval(() => {
+      if (this.mode !== 'HTML5' || this.audio.paused) return;
+
+      const timeSinceUpdate = Date.now() - this.lastTimeUpdateAt;
+      const timeAdvanced = Math.abs(this.audio.currentTime - this.lastTimeUpdateValue) > 0.1;
+
+      if (timeAdvanced) {
+        // Stream is alive — reset
+        this.lastTimeUpdateAt = Date.now();
+        this.lastTimeUpdateValue = this.audio.currentTime;
+        return;
+      }
+
+      // No time progress for 5+ seconds — stream is frozen
+      if (timeSinceUpdate > 5000 && !this.stallRecoveryAttempted) {
+        this.stallRecoveryAttempted = true;
+        console.warn('HTML5 audio stall detected: no progress for 5s, switching to YouTube for videoId:', this.currentPlayingVideoId);
+        this.stopStallDetector();
+        if (this.currentPlayingVideoId) {
+          this.playVideo(this.currentPlayingVideoId, this.audio.currentTime || 0).catch(console.error);
+        }
+      }
+    }, 1000);
+  }
+
+  private stopStallDetector() {
+    if (this.stallDetectorHandle) {
+      clearInterval(this.stallDetectorHandle);
+      this.stallDetectorHandle = null;
+    }
   }
 
   /**
@@ -451,9 +584,22 @@ export class AudioEngine {
     }
   }
 
-  public async playUrl(streamUrl: string, startTime: number = 0): Promise<void> {
+  public async playUrl(streamUrl: string, startTime: number = 0, videoId?: string): Promise<void> {
+    if (videoId) {
+      this.currentPlayingVideoId = videoId;
+    }
+
+    // Google Video direct links cannot be loaded in crossOrigin HTMLAudioElement due to browser CORS policies
+    if (!streamUrl || streamUrl.includes('googlevideo.com')) {
+      if (this.currentPlayingVideoId) {
+        return this.playVideo(this.currentPlayingVideoId, startTime);
+      }
+      return;
+    }
+
     this.mode = 'HTML5';
     this.stopTicker();
+    this.stallRecoveryAttempted = false;
     if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       try {
         this.ytPlayer.pauseVideo();
@@ -476,11 +622,15 @@ export class AudioEngine {
       this.audio.volume = this.currentVolume;
       this.audio.currentTime = startTime;
       await this.audio.play();
+      this.startStallDetector();
       if (this.onPlayStateChangeCallback) {
         this.onPlayStateChangeCallback(true);
       }
     } catch (err) {
-      console.warn('Play error', err);
+      console.warn('Play error in HTML5, falling back to YouTube', err);
+      if (this.currentPlayingVideoId) {
+        return this.playVideo(this.currentPlayingVideoId, startTime);
+      }
       throw err;
     }
   }

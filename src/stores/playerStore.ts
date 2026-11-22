@@ -10,9 +10,26 @@ import { audioEngine } from '../audio/audioEngine';
 import { innertubeService } from '../services/innertube';
 import { jioSaavnService } from '../services/jiosaavn';
 import { listenTogetherService } from '../services/listenTogether';
+import { parseDurationSec } from '../utils/trackMatcher';
+import { useSettingsStore } from './settingsStore';
 
 // High-speed stream cache for instant 0ms playback and gapless skipping
 const streamCache = new Map<string, string>();
+
+// Master playback timeout: auto-skips if nothing plays within this duration
+let playbackTimeoutHandle: any = null;
+
+function clearPlaybackTimeout() {
+  if (playbackTimeoutHandle) {
+    clearTimeout(playbackTimeoutHandle);
+    playbackTimeoutHandle = null;
+  }
+}
+
+// Expose cache clear for settings quality change
+if (typeof window !== 'undefined') {
+  (window as any).__znodeStreamCacheClear = () => streamCache.clear();
+}
 
 let sleepTimerInterval: any = null;
 
@@ -32,17 +49,19 @@ async function prepareUpcomingSong(song: Song) {
   let streamUrl = streamCache.get(song.videoId);
   if (!streamUrl) {
     try {
-      // 1. Prioritize 320kbps Lossless CDN stream (JioSaavn)
-      const saavnMatch = await jioSaavnService.findMatch(song.title, song.artist);
-      if (saavnMatch) {
-        streamUrl = saavnMatch;
-        streamCache.set(song.videoId, saavnMatch);
-      } else {
-        // 2. Direct high-bitrate YouTube audio stream fallback
-        const directYtStream = await innertubeService.resolveAudioStream(song.videoId);
-        if (directYtStream && directYtStream.startsWith('http')) {
-          streamUrl = directYtStream;
-          streamCache.set(song.videoId, directYtStream);
+      const durationSec = parseDurationSec(song.durationText);
+      const quality = useSettingsStore.getState().audioQuality;
+
+      // When High/Lossless is selected, query verified JioSaavn CDN (320kbps AAC)
+      // Hard timeout prevents background preloading from hanging indefinitely
+      if (quality !== 'LOW') {
+        const saavnMatch = await Promise.race([
+          jioSaavnService.findMatch(song.title, song.artist, durationSec),
+          new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+        ]);
+        if (saavnMatch && !saavnMatch.includes('googlevideo.com')) {
+          streamUrl = saavnMatch;
+          streamCache.set(song.videoId, saavnMatch);
         }
       }
     } catch (e) {
@@ -163,18 +182,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     set({ currentTime, duration });
   });
 
+  // === Error Recovery (YZ Music recoverFrom pattern) ===
+  // Only react to errors if the song hasn't started playing.
+  // YouTube IFrame fires onError AFTER playVideo() resolves,
+  // so we must check isPlaying to avoid re-triggering for working songs.
+  audioEngine.onError((err) => {
+    const code = err?.data;
+    const { isPlaying, currentSong } = get();
+    console.warn('audioEngine error:', code, '| isPlaying:', isPlaying, '| song:', currentSong?.title);
+    
+    // If song IS playing, ignore the error — it's transient (ad skip, buffering, etc.)
+    if (isPlaying) return;
+    
+    // Song failed to start. The playback timeout (15s) will handle auto-advance.
+    // Just clear the cached stream so the timeout's next() gets a fresh resolve.
+    if (currentSong) {
+      streamCache.delete(currentSong.videoId);
+    }
+  });
+
   audioEngine.onPlayStateChange((isPlaying) => {
     if (isPlaying) {
+      clearPlaybackTimeout();
       audioEngine.setVolume(get().volume);
     }
     set({ isPlaying });
   });
 
   audioEngine.onTrackLoaded(() => {
+    clearPlaybackTimeout();
     audioEngine.setVolume(get().volume);
   });
 
   audioEngine.onEnded(() => {
+    clearPlaybackTimeout();
     const { repeatMode, next, seek, sleepTimerEndOfTrack, cancelSleepTimer } = get();
     if (sleepTimerEndOfTrack) {
       cancelSleepTimer();
@@ -338,21 +379,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       if (!streamUrl) {
         try {
-          // Fast parallel resolution: query 320k Lossless stream (JioSaavn)
-          const matchPromise = jioSaavnService.findMatch(song.title, song.artist);
-          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
-          const match = await Promise.race([matchPromise, timeoutPromise]);
-          if (match) {
-            streamUrl = match;
-            streamCache.set(song.videoId, match);
-          } else {
-            // Direct high-bitrate audio stream fallback (100% ad-free Web Audio playback)
-            const ytStreamPromise = innertubeService.resolveAudioStream(song.videoId);
-            const ytTimeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
-            const ytMatch = await Promise.race([ytStreamPromise, ytTimeoutPromise]);
-            if (ytMatch && ytMatch.startsWith('http')) {
-              streamUrl = ytMatch;
-              streamCache.set(song.videoId, ytMatch);
+          const durationSec = parseDurationSec(song.durationText);
+          const quality = useSettingsStore.getState().audioQuality;
+
+          // If user prefers High or Lossless quality, query verified JioSaavn CDN (320kbps AAC)
+          // TrackMatcher strictly prevents playing wrong songs
+          // Apply a hard timeout so playback never stalls waiting for JioSaavn
+          if (quality !== 'LOW') {
+            try {
+              const saavnMatch = await Promise.race([
+                jioSaavnService.findMatch(song.title, song.artist, durationSec),
+                new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+              ]);
+              if (saavnMatch && !saavnMatch.includes('googlevideo.com')) {
+                streamUrl = saavnMatch;
+                streamCache.set(song.videoId, saavnMatch);
+              }
+            } catch (e) {
+              console.warn('JioSaavn match failed, using YouTube fallback:', e);
             }
           }
         } catch (e) {
@@ -363,20 +407,41 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       // Strictly enforce fixed user volume across track transitions
       audioEngine.setVolume(get().volume);
 
-      if (streamUrl) {
+      // Clear any previous playback timeout
+      clearPlaybackTimeout();
+
+      // Playback: JioSaavn CDN stream via HTML5 audio (supports EQ/DSP), or YouTube IFrame fallback
+      if (streamUrl && !streamUrl.includes('googlevideo.com')) {
         try {
-          await audioEngine.playUrl(streamUrl);
+          await audioEngine.playUrl(streamUrl, 0, song.videoId);
         } catch (err) {
-          console.warn('HTML5 direct playback failed, falling back to YouTube', err);
-          await audioEngine.playVideo(song.videoId);
+          console.warn('HTML5 direct playback failed, falling back to YouTube:', err);
+          streamCache.delete(song.videoId);
+          try {
+            await audioEngine.playVideo(song.videoId);
+          } catch (err2) {
+            console.error('YouTube fallback also failed for', song.title, err2);
+          }
         }
       } else {
+        // No CDN stream found — play directly via YouTube IFrame player (always works)
         try {
           await audioEngine.playVideo(song.videoId);
         } catch (err) {
           console.error('Failed to play video for', song.title, err);
         }
       }
+
+      // Safety timeout: if isPlaying hasn't become true within 15s, auto-advance
+      const playbackSongId = song.videoId;
+      playbackTimeoutHandle = setTimeout(() => {
+        const state = get();
+        if (!state.isPlaying && state.currentSong?.videoId === playbackSongId) {
+          console.warn('Playback timeout: song did not start within 15s, auto-advancing:', song.title);
+          streamCache.delete(playbackSongId);
+          state.next();
+        }
+      }, 15000);
 
       // In Default Autoplay Mode:
       // Once a related queue formed, do NOT refresh until it reaches end of queue or user refresh!

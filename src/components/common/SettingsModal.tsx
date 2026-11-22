@@ -182,20 +182,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.03]">
-            <div>
-              <p className="text-sm font-medium text-white">Streaming Audio Quality</p>
-              <p className="text-xs text-white/40">Prioritize lossless FLAC when available</p>
+          <div className="p-3 rounded-2xl bg-white/[0.03] flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-white">Audio Quality</p>
+                <p className="text-xs text-white/40">
+                  {audioQuality === 'LOSSLESS'
+                    ? 'Best quality — 320kbps AAC CDN, YouTube Opus 160k fallback'
+                    : audioQuality === 'HIGH'
+                    ? 'High quality — 320kbps AAC when available'
+                    : 'Data saver — YouTube stream only (128k)'}
+                </p>
+              </div>
             </div>
-            <select
-              value={audioQuality}
-              onChange={(e) => setAudioQuality(e.target.value as any)}
-              className="bg-white/10 border border-white/10 text-white rounded-xl px-3 py-1 text-xs outline-none"
-            >
-              <option value="LOSSLESS" className="bg-[#1C1C1E]">Lossless (FLAC)</option>
-              <option value="HIGH" className="bg-[#1C1C1E]">High (256k AAC/Opus)</option>
-              <option value="LOW" className="bg-[#1C1C1E]">Standard (128k)</option>
-            </select>
+            <div className="flex gap-1.5 bg-white/[0.06] p-1 rounded-xl">
+              <button
+                onClick={() => setAudioQuality('LOSSLESS')}
+                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  audioQuality === 'LOSSLESS'
+                    ? 'bg-accent-red/20 text-accent-red border border-accent-red/30 shadow-sm'
+                    : 'text-white/50 hover:text-white/70'
+                }`}
+              >
+                Lossless
+              </button>
+              <button
+                onClick={() => setAudioQuality('HIGH')}
+                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  audioQuality === 'HIGH'
+                    ? 'bg-accent-red/20 text-accent-red border border-accent-red/30 shadow-sm'
+                    : 'text-white/50 hover:text-white/70'
+                }`}
+              >
+                High
+              </button>
+              <button
+                onClick={() => setAudioQuality('LOW')}
+                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  audioQuality === 'LOW'
+                    ? 'bg-accent-red/20 text-accent-red border border-accent-red/30 shadow-sm'
+                    : 'text-white/50 hover:text-white/70'
+                }`}
+              >
+                Standard
+              </button>
+            </div>
           </div>
 
           {onOpenSleepTimer && (

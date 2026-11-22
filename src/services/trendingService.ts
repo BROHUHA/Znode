@@ -893,8 +893,8 @@ export const CHILL_LOFI_ITEMS: ShelfItem[] = [
   {
     title: 'Glimpse of Us',
     subtitle: 'Joji • SMITHEREENS',
-    thumbnailUrl: 'https://i.ytimg.com/vi/NgsWGfU97YQ/mqdefault.jpg',
-    videoId: 'NgsWGfU97YQ',
+    thumbnailUrl: 'https://i.ytimg.com/vi/FvOpPeKSf_4/mqdefault.jpg',
+    videoId: 'FvOpPeKSf_4',
     customIndex: '3',
   },
   {
@@ -1317,14 +1317,79 @@ export class TrendingService {
   }
 
   /**
+   * Generates dynamic Quick Picks by combining the user's playback history with global favorites
+   */
+  public getPersonalizedQuickPicks(): ShelfItem[] {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('znode_playback_history') || localStorage.getItem('yz_playback_history');
+        if (raw) {
+          const songs: Song[] = JSON.parse(raw);
+          if (Array.isArray(songs) && songs.length > 0) {
+            const userPicks: ShelfItem[] = songs.slice(0, 8).map((s) => ({
+              title: s.title,
+              subtitle: s.artist,
+              thumbnailUrl: s.thumbnailUrl || (s.videoId ? `https://i.ytimg.com/vi/${s.videoId}/hqdefault.jpg` : null),
+              videoId: s.videoId,
+            }));
+            const seenIds = new Set(userPicks.map((p) => p.videoId));
+            const backfill = QUICK_PICKS_ITEMS.filter((p) => p.videoId && !seenIds.has(p.videoId));
+            return [...userPicks, ...backfill].slice(0, 16);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed loading personalized quick picks:', e);
+    }
+    return QUICK_PICKS_ITEMS.slice(0, 16);
+  }
+
+  /**
+   * Generates a time-of-day contextual shelf
+   */
+  public getTimeOfDayShelf(): HomeShelf {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      return {
+        title: 'Morning Energy & Acoustic',
+        subtitle: 'Start your day with uplifting melodies and coffee tunes',
+        type: 'DEFAULT',
+        items: ENGLISH_GLOBAL_ITEMS.slice(0, 10),
+      };
+    } else if (hour >= 12 && hour < 17) {
+      return {
+        title: 'Afternoon Focus & Beats',
+        subtitle: 'High tempo productivity and rhythm',
+        type: 'DEFAULT',
+        items: EDM_ITEMS.slice(0, 10),
+      };
+    } else if (hour >= 17 && hour < 22) {
+      return {
+        title: 'Evening Sunset Chill',
+        subtitle: 'Wind down with mellow acoustics and golden hour vibes',
+        type: 'DEFAULT',
+        items: CHILL_LOFI_ITEMS.slice(0, 10),
+      };
+    } else {
+      return {
+        title: 'Late Night Lo-Fi & Calm',
+        subtitle: 'Deep focus, warm bass, and nocturnal ambient sounds',
+        type: 'DEFAULT',
+        items: CHILL_LOFI_ITEMS.slice(0, 10),
+      };
+    }
+  }
+
+  /**
    * Quick picks 4-row grid shelf
    */
-  public getQuickPicksShelf(items: ShelfItem[] = QUICK_PICKS_ITEMS): HomeShelf {
+  public getQuickPicksShelf(items?: ShelfItem[]): HomeShelf {
+    const finalItems = items && items.length > 0 ? items : this.getPersonalizedQuickPicks();
     return {
       title: 'Quick picks',
       subtitle: 'Start radio with songs you love',
       type: 'QUICK_PICKS',
-      items: items.slice(0, 16),
+      items: finalItems.slice(0, 16),
     };
   }
 

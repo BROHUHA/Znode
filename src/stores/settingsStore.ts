@@ -112,6 +112,10 @@ export const useSettingsStore = create<SettingsState>((set) => {
     setAudioQuality: (quality) => {
       setStorage('quality', quality);
       set({ audioQuality: quality });
+      // Clear stream cache so next track uses the new quality preference
+      try {
+        (window as any).__znodeStreamCacheClear?.();
+      } catch {}
     },
 
     setModuleIndexUrl: (url) => {

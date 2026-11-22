@@ -152,6 +152,8 @@ export type LyricsSource =
   | 'GENIUS'
   | 'KUGOU'
   | 'BETTER_LYRICS'
+  | 'SIMPMUSIC'
+  | 'JIOSAAVN'
   | 'EMBEDDED';
 
 export interface LyricsData {
