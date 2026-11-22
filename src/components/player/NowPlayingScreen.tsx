@@ -763,7 +763,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
       {/* 3. Hero Artwork: Apple Music Full-Bleed Immersive Poster (Matching Reference Image)
            Fills the upper ~50-52vh with bold cinematic presence.
            Stays solid and crisp for the upper ~68%, then dissolves smoothly into the dark reflection below. */}
-      {nowPlayingTab === 'PLAYER' && (
+      {(nowPlayingTab === 'PLAYER' || isDocked) && (
         <div className="absolute top-0 left-0 right-0 h-[50vh] sm:h-[53vh] max-h-[520px] overflow-hidden pointer-events-none z-0">
           <img
             key={`hero-${currentSong?.videoId || artworkUrl}`}
@@ -784,8 +784,8 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         </div>
       )}
 
-      {/* 3B. Queue/Lyrics overlay — very light scrim preserving the warm ambient BG colors */}
-      {nowPlayingTab !== 'PLAYER' && (
+      {/* 3B. Queue/Lyrics overlay — very light scrim preserving the warm ambient BG colors (on mobile full-screen overlay) */}
+      {!isDocked && nowPlayingTab !== 'PLAYER' && (
         <div className="absolute inset-0 z-[1] pointer-events-none"
           style={{
             background: `linear-gradient(to bottom,
@@ -866,7 +866,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         )}
 
         {/* View Switcher: PLAYER vs LYRICS vs QUEUE */}
-        {nowPlayingTab === 'PLAYER' && (
+        {(nowPlayingTab === 'PLAYER' || isDocked) && (
           <div className="flex-1 flex flex-col justify-end pb-2">
             {/* Track Info Row + Liquid Glass Action Buttons */}
             <div className="w-full flex items-center justify-between mb-1.5">
@@ -916,8 +916,8 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
           </div>
         )}
 
-        {/* VIEW B: Real-Time Synchronized Lyrics View */}
-        {nowPlayingTab === 'LYRICS' && (
+        {/* VIEW B: Real-Time Synchronized Lyrics View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
+        {!isDocked && nowPlayingTab === 'LYRICS' && (
           <div className="flex-1 flex flex-col overflow-hidden my-auto py-2 relative np-tab-enter">
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] mb-2 shrink-0">
               <div className="flex items-center gap-2">
@@ -1038,8 +1038,8 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
           </div>
         )}
 
-        {/* VIEW C: Up Next Queue & Related Music Chart View */}
-        {nowPlayingTab === 'QUEUE' && (
+        {/* VIEW C: Up Next Queue & Related Music Chart View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
+        {!isDocked && nowPlayingTab === 'QUEUE' && (
           <div className="flex-1 flex flex-col overflow-hidden my-auto py-2 np-tab-enter">
             {/* Header: Sub-tabs (Queue vs Related) + Return */}
             <div className="flex items-center justify-between pb-2 border-b border-white/[0.08] mb-2">

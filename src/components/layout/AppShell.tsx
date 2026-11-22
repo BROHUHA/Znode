@@ -10,6 +10,8 @@ import { ExploreView } from '../../views/ExploreView';
 import { SearchView } from '../../views/SearchView';
 import { LibraryView } from '../../views/LibraryView';
 import { DetailView } from '../../views/DetailView';
+import { MainLyricsView } from '../player/MainLyricsView';
+import { MainQueueView } from '../player/MainQueueView';
 import { EqualizerModal } from '../common/EqualizerModal';
 import { SettingsModal } from '../common/SettingsModal';
 import { ListenTogetherModal } from '../common/ListenTogetherModal';
@@ -24,7 +26,7 @@ import { useSearchStore } from '../../stores/searchStore';
 import { cleanThumbnailUrl } from '../../utils/thumbnail';
 
 export const AppShell: React.FC = () => {
-  const { currentSong } = usePlayerStore();
+  const { currentSong, nowPlayingTab, setNowPlayingTab } = usePlayerStore();
   const { results: searchResults } = useSearchStore();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [isScrolled, setIsScrolled] = useState(false);
@@ -111,12 +113,14 @@ export const AppShell: React.FC = () => {
     thumbnailUrl?: string | null,
     type?: string
   ) => {
+    setNowPlayingTab('PLAYER');
     setSelectedBrowse({ browseId, params, title, subtitle, thumbnailUrl, type });
   };
 
   const handleSelectTab = (tab: NavTab) => {
     setSelectedBrowse(null);
     setCurrentTab(tab);
+    setNowPlayingTab('PLAYER');
     setIsBottomInline(false);
     accumulatedDelta.current = 0;
   };
@@ -157,6 +161,8 @@ export const AppShell: React.FC = () => {
   };
 
   const getTitle = () => {
+    if (nowPlayingTab === 'LYRICS') return 'Lyrics';
+    if (nowPlayingTab === 'QUEUE') return 'Up Next Queue';
     if (selectedBrowse) return selectedBrowse.title || 'Collection';
     switch (currentTab) {
       case 'home':
@@ -235,33 +241,71 @@ export const AppShell: React.FC = () => {
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          {selectedBrowse ? (
-            <DetailView
-              browseId={selectedBrowse.browseId}
-              params={selectedBrowse.params}
-              initialTitle={selectedBrowse.title}
-              initialSubtitle={selectedBrowse.subtitle}
-              initialThumbnailUrl={selectedBrowse.thumbnailUrl}
-              initialType={selectedBrowse.type}
-              onBack={goBack}
-              onOpenDetail={handleOpenDetail}
-              onTitleLoaded={(title) => {
-                setSelectedBrowse((prev) => (prev ? { ...prev, title } : null));
-              }}
-            />
-          ) : (
-            <>
-              {currentTab === 'home' && <HomeView onOpenDetail={handleOpenDetail} />}
-              {currentTab === 'explore' && <ExploreView onOpenDetail={handleOpenDetail} />}
-              {currentTab === 'search' && <SearchView onOpenDetail={handleOpenDetail} />}
-              {currentTab === 'library' && (
-                <LibraryView
-                  onOpenDetail={handleOpenDetail}
-                  onOpenAccount={() => setShowAccountModal(true)}
-                />
-              )}
-            </>
-          )}
+          {/* On Desktop (>= lg 1024px), if user clicks Lyrics or Queue, display it directly in the main feed screen */}
+          <div className="hidden lg:contents">
+            {nowPlayingTab === 'LYRICS' ? (
+              <MainLyricsView onClose={() => setNowPlayingTab('PLAYER')} />
+            ) : nowPlayingTab === 'QUEUE' ? (
+              <MainQueueView onClose={() => setNowPlayingTab('PLAYER')} />
+            ) : selectedBrowse ? (
+              <DetailView
+                browseId={selectedBrowse.browseId}
+                params={selectedBrowse.params}
+                initialTitle={selectedBrowse.title}
+                initialSubtitle={selectedBrowse.subtitle}
+                initialThumbnailUrl={selectedBrowse.thumbnailUrl}
+                initialType={selectedBrowse.type}
+                onBack={goBack}
+                onOpenDetail={handleOpenDetail}
+                onTitleLoaded={(title) => {
+                  setSelectedBrowse((prev) => (prev ? { ...prev, title } : null));
+                }}
+              />
+            ) : (
+              <>
+                {currentTab === 'home' && <HomeView onOpenDetail={handleOpenDetail} />}
+                {currentTab === 'explore' && <ExploreView onOpenDetail={handleOpenDetail} />}
+                {currentTab === 'search' && <SearchView onOpenDetail={handleOpenDetail} />}
+                {currentTab === 'library' && (
+                  <LibraryView
+                    onOpenDetail={handleOpenDetail}
+                    onOpenAccount={() => setShowAccountModal(true)}
+                  />
+                )}
+              </>
+            )}
+          </div>
+
+          {/* On Mobile/Tablet screens (< lg 1024px), keep standard feed navigation */}
+          <div className="contents lg:hidden">
+            {selectedBrowse ? (
+              <DetailView
+                browseId={selectedBrowse.browseId}
+                params={selectedBrowse.params}
+                initialTitle={selectedBrowse.title}
+                initialSubtitle={selectedBrowse.subtitle}
+                initialThumbnailUrl={selectedBrowse.thumbnailUrl}
+                initialType={selectedBrowse.type}
+                onBack={goBack}
+                onOpenDetail={handleOpenDetail}
+                onTitleLoaded={(title) => {
+                  setSelectedBrowse((prev) => (prev ? { ...prev, title } : null));
+                }}
+              />
+            ) : (
+              <>
+                {currentTab === 'home' && <HomeView onOpenDetail={handleOpenDetail} />}
+                {currentTab === 'explore' && <ExploreView onOpenDetail={handleOpenDetail} />}
+                {currentTab === 'search' && <SearchView onOpenDetail={handleOpenDetail} />}
+                {currentTab === 'library' && (
+                  <LibraryView
+                    onOpenDetail={handleOpenDetail}
+                    onOpenAccount={() => setShowAccountModal(true)}
+                  />
+                )}
+              </>
+            )}
+          </div>
         </main>
 
         {/* Top Fade Blur Layer (Pure transparent liquid glass blur) */}
