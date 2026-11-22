@@ -178,35 +178,84 @@ export const AppShell: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden text-white select-none relative bg-[#07070a]">
-      {/* 100% Accurate Dynamic Blurred Artwork Background */}
+      {/* Authentic Apple Music Frosted Liquid Glass Background (Luminous, transparent white blur matching NowPlayingScreen) */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
-        {/* Fading Out Previous Artwork Layer for seamless crossfades */}
+        {/* Layer A: Full-bleed luminous ambient wash */}
         {fadingArtwork && (
           <img
             key={`fade-out-${fadingArtwork}`}
             src={fadingArtwork}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] pointer-events-none animate-bg-fadeout"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[48px] sm:blur-[60px] saturate-[175%] brightness-[0.88] scale-[1.25] pointer-events-none animate-bg-fadeout"
           />
         )}
 
-        {/* Current Active Track Blurred Artwork Layer */}
         {activeArtwork ? (
           <img
             key={`active-${activeArtwork}`}
             src={activeArtwork}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[36px] sm:blur-[48px] saturate-[170%] brightness-[0.76] pointer-events-none animate-bg-crossfade"
+            className="absolute inset-0 w-full h-full object-cover object-center filter blur-[48px] sm:blur-[60px] saturate-[175%] brightness-[0.88] scale-[1.25] pointer-events-none animate-bg-crossfade"
           />
         ) : (
           /* Subtle default ambient wash when no track is playing */
           <div className="absolute inset-0 bg-gradient-to-br from-[#FA2D48]/14 via-[#8B5CF6]/10 to-transparent filter blur-[60px] opacity-40 pointer-events-none" />
         )}
 
-        {/* Contrast Scrim: ensures sharp legibility for text, capsules & cards */}
-        <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+        {/* Layer B: Vertically inverted reflection in lower portion for rich liquid depth */}
+        {activeArtwork && (
+          <div
+            className="absolute inset-x-0 bottom-0 h-[65vh] overflow-hidden pointer-events-none transition-all duration-700"
+            style={{
+              maskImage:
+                'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 20%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.95) 100%)',
+              WebkitMaskImage:
+                'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 20%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.95) 100%)',
+            }}
+          >
+            <img
+              key={`reflection-${activeArtwork}`}
+              src={activeArtwork}
+              alt=""
+              aria-hidden="true"
+              className="w-full h-full object-cover object-bottom filter blur-[30px] sm:blur-[40px] saturate-[180%] brightness-[0.86] pointer-events-none animate-bg-crossfade"
+              style={{
+                transform: 'scaleY(-1) scaleX(1.2)',
+                transformOrigin: 'top center',
+              }}
+            />
+          </div>
+        )}
+
+        {/* Layer C: Translucent white-frosted liquid glass scrim (airy, luminous, preserving vibrant glow) */}
+        <div
+          className="absolute inset-0 pointer-events-none transition-all duration-500"
+          style={{
+            background:
+              nowPlayingTab !== 'PLAYER'
+                ? `linear-gradient(to bottom,
+                    rgba(255, 255, 255, 0.09) 0%,
+                    rgba(255, 255, 255, 0.04) 22%,
+                    rgba(0, 0, 0, 0.04) 45%,
+                    rgba(0, 0, 0, 0.12) 75%,
+                    rgba(0, 0, 0, 0.22) 100%
+                  )`
+                : `linear-gradient(to bottom,
+                    rgba(0, 0, 0, 0.12) 0%,
+                    rgba(255, 255, 255, 0.02) 20%,
+                    rgba(0, 0, 0, 0.05) 50%,
+                    rgba(0, 0, 0, 0.16) 75%,
+                    rgba(0, 0, 0, 0.28) 100%
+                  )`,
+          }}
+        />
+
+        {/* Extra delicate white liquid sheen when viewing Lyrics or Queue */}
+        {nowPlayingTab !== 'PLAYER' && (
+          <div className="absolute inset-0 bg-white/[0.03] pointer-events-none" />
+        )}
       </div>
 
       {/* 1. Desktop Sidebar (Left side, >= 768px) */}
