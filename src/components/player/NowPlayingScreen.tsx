@@ -127,6 +127,8 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
     setNowPlayingOpen,
     nowPlayingTab,
     setNowPlayingTab,
+    queueSubTab,
+    setQueueSubTab,
     queue,
     queueIndex,
     playSong,
@@ -143,14 +145,12 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [isLyricsLoading, setIsLyricsLoading] = useState<boolean>(false);
   const [isSynced, setIsSynced] = useState<boolean>(true);
-  const [lyricsSource, setLyricsSource] = useState<string>('LRCLIB');
   const [activeLyricIndex, setActiveLyricIndex] = useState<number>(-1);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [downloadedSongs, setDownloadedSongs] = useState<Set<string>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'IDLE' | 'DOWNLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [playbackModeFeedback, setPlaybackModeFeedback] = useState<string | null>(null);
-  const [queueSubTab, setQueueSubTab] = useState<'QUEUE' | 'RELATED'>('QUEUE');
   const [relatedSongs, setRelatedSongs] = useState<Song[]>([]);
   const [isLoadingRelated, setIsLoadingRelated] = useState(false);
   const [addedFeedback, setAddedFeedback] = useState<Record<string, boolean>>({});
@@ -429,7 +429,6 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         setLyrics(lines);
         const hasTimestamps = lines.some((l, idx) => idx > 0 && l.startTimeMs > 0);
         setIsSynced(!!data.synced && hasTimestamps);
-        setLyricsSource(data.source || 'LRCLIB');
         setIsLyricsLoading(false);
       })
       .catch((e) => {
@@ -831,7 +830,11 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
             >
               <div className="w-10 h-1 rounded-full bg-white/40 mb-1" />
               <p className="text-[12px] font-semibold text-white/80 tracking-wide drop-shadow select-none">
-                {currentSong.albumName
+                {nowPlayingTab === 'LYRICS'
+                  ? 'Lyrics'
+                  : nowPlayingTab === 'QUEUE'
+                  ? 'Up Next'
+                  : currentSong.albumName
                   ? `Playing from ${currentSong.albumName}`
                   : currentSong.radioName
                   ? `Playing from ${currentSong.radioName}`
@@ -919,31 +922,6 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         {/* VIEW B: Real-Time Synchronized Lyrics View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
         {!isDocked && nowPlayingTab === 'LYRICS' && (
           <div className="flex-1 flex flex-col overflow-hidden my-auto py-2 relative np-tab-enter">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] mb-2 shrink-0">
-              <div className="flex items-center gap-2">
-                <Music2 className="w-4 h-4 text-accent-red" />
-                <span className="text-xs font-bold uppercase tracking-wider text-white">Lyrics</span>
-                {isSynced ? (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-red animate-pulse" />
-                    Synchronized
-                  </span>
-                ) : lyrics.length > 0 ? (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white/60 border border-white/10">
-                    {lyricsSource === 'MUSIXMATCH' ? 'Official' : 'Plain'}
-                  </span>
-                ) : null}
-              </div>
-              <button
-                onClick={() => setNowPlayingTab('PLAYER')}
-                className="text-xs text-white/50 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                title="Back to Artwork"
-              >
-                <span>Artwork</span>
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
             {isLyricsLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center text-white/60 gap-3">
                 <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-accent-red animate-spin" />
@@ -1025,7 +1003,6 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                         setLyrics(data.lines || []);
                         const hasTimestamps = (data.lines || []).some((l, idx) => idx > 0 && l.startTimeMs > 0);
                         setIsSynced(!!data.synced && hasTimestamps);
-                        setLyricsSource(data.source || 'LRCLIB');
                         setIsLyricsLoading(false);
                       });
                   }}
@@ -1068,14 +1045,6 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                   <span>Related Music</span>
                 </button>
               </div>
-
-              <button
-                onClick={() => setNowPlayingTab('PLAYER')}
-                className="text-xs text-white/50 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-              >
-                <span>Artwork</span>
-                <X className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             {/* SUB-TAB 1: Queue with Arrange (Reorder, Remove, Shuffle, Clear) */}
