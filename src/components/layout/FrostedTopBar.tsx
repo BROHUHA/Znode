@@ -233,11 +233,18 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
             null
           ) : (
             /* Large Display Heading as Header */
-            <div className="flex items-center gap-2.5 pointer-events-auto min-w-0">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white truncate">
-                {title}
-              </h1>
-              {badge}
+            <div className="flex flex-col justify-center pointer-events-auto min-w-0">
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white truncate">
+                  {title}
+                </h1>
+                {badge}
+              </div>
+              {subtitle && (
+                <div className="text-xs text-white/60 truncate mt-0.5">
+                  {subtitle}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -518,7 +525,7 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
 
           <button
             onClick={() => setIsMenuOpen((prev) => !prev)}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass-circle transition-all duration-200 cursor-pointer flex items-center justify-center active:scale-90 hover:scale-105 border border-white/25 shadow-lg group"
+            className="md:hidden w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass-circle transition-all duration-200 cursor-pointer flex items-center justify-center active:scale-90 hover:scale-105 border border-white/25 shadow-lg group"
             title="Znode Music (ZN) Menu"
             aria-label="Znode Music (ZN) Menu"
             aria-expanded={isMenuOpen}

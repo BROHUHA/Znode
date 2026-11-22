@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { LyricLine } from '../../types';
 import { lyricsService } from '../../services/lyricsService';
 import { usePlayerStore } from '../../stores/playerStore';
-import { Music2, ChevronDown, Sparkles, RotateCw } from 'lucide-react';
+import { Music2, ChevronDown, RotateCw } from 'lucide-react';
 
 interface MainLyricsViewProps {
   onClose?: () => void;
@@ -14,7 +14,6 @@ export const MainLyricsView: React.FC<MainLyricsViewProps> = () => {
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [isLyricsLoading, setIsLyricsLoading] = useState<boolean>(false);
   const [isSynced, setIsSynced] = useState<boolean>(true);
-  const [lyricsSource, setLyricsSource] = useState<string>('LRCLIB');
   const [activeLyricIndex, setActiveLyricIndex] = useState<number>(-1);
   const [isUserScrolling, setIsUserScrolling] = useState<boolean>(false);
 
@@ -41,7 +40,6 @@ export const MainLyricsView: React.FC<MainLyricsViewProps> = () => {
         setLyrics(lines);
         const hasTimestamps = lines.some((l, idx) => idx > 0 && l.startTimeMs > 0);
         setIsSynced(!!data.synced && hasTimestamps);
-        setLyricsSource(data.source || 'LRCLIB');
         setIsLyricsLoading(false);
       })
       .catch((err) => {
@@ -120,7 +118,6 @@ export const MainLyricsView: React.FC<MainLyricsViewProps> = () => {
         setLyrics(lines);
         const hasTimestamps = lines.some((l, idx) => idx > 0 && l.startTimeMs > 0);
         setIsSynced(!!data.synced && hasTimestamps);
-        setLyricsSource(data.source || 'LRCLIB');
         setIsLyricsLoading(false);
       })
       .catch(() => setIsLyricsLoading(false));
@@ -136,35 +133,7 @@ export const MainLyricsView: React.FC<MainLyricsViewProps> = () => {
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col relative px-4 md:px-8 lg:px-12 pt-1 pb-16 overflow-hidden select-none">
-      {/* Fitted Status Row: Synced Badge + Hint + Reload */}
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/[0.06] text-xs shrink-0 max-w-4xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          {isSynced ? (
-            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
-              <Sparkles className="w-3 h-3" />
-              Real-Time Synced
-            </span>
-          ) : lyrics.length > 0 ? (
-            <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-white/60 border border-white/10">
-              {lyricsSource === 'MUSIXMATCH' ? 'Official' : lyricsSource || 'Plain Text'}
-            </span>
-          ) : null}
-          <span className="text-white/30 hidden sm:inline">•</span>
-          <span className="text-white/50 text-xs truncate hidden sm:inline">Click any line to jump to that moment</span>
-        </div>
-
-        <button
-          onClick={retryFetch}
-          disabled={isLyricsLoading}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/10 text-[11px] font-medium text-white/60 hover:text-white transition-colors cursor-pointer border border-white/10"
-          title="Refresh Lyrics"
-        >
-          <RotateCw className={`w-3 h-3 ${isLyricsLoading ? 'animate-spin' : ''}`} />
-          <span>Reload</span>
-        </button>
-      </div>
-
+    <div className="flex-1 h-full flex flex-col relative px-4 md:px-8 lg:px-12 pt-2 pb-16 overflow-hidden select-none">
       {/* Lyrics Body */}
       {isLyricsLoading ? (
         <div className="flex-1 flex flex-col items-center justify-center text-white/60 gap-4">

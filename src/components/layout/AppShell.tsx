@@ -329,13 +329,7 @@ export const AppShell: React.FC = () => {
           }
           isSearch={currentTab === 'search' && !selectedBrowse && nowPlayingTab === 'PLAYER'}
           scrolled={isScrolled}
-          onBack={
-            nowPlayingTab !== 'PLAYER'
-              ? () => setNowPlayingTab('PLAYER')
-              : selectedBrowse
-              ? goBack
-              : undefined
-          }
+          onBack={selectedBrowse ? goBack : undefined}
           centerSlot={
             nowPlayingTab === 'QUEUE' ? (
               <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/[0.08] border border-white/10 backdrop-blur-xl">
