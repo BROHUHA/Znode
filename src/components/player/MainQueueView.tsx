@@ -5,7 +5,6 @@ import { innertubeService } from '../../services/innertube';
 import { jioSaavnService } from '../../services/jiosaavn';
 import {
   ListMusic,
-  Radio,
   Repeat,
   Shuffle,
   Trash2,
@@ -19,10 +18,10 @@ import {
 } from 'lucide-react';
 
 interface MainQueueViewProps {
-  onClose: () => void;
+  onClose?: () => void;
 }
 
-export const MainQueueView: React.FC<MainQueueViewProps> = ({ onClose }) => {
+export const MainQueueView: React.FC<MainQueueViewProps> = () => {
   const {
     currentSong,
     queue,
@@ -37,10 +36,9 @@ export const MainQueueView: React.FC<MainQueueViewProps> = ({ onClose }) => {
     repeatMode,
     setPlaybackMode,
     refreshRelatedQueue,
-    setNowPlayingTab,
+    queueSubTab,
   } = usePlayerStore();
 
-  const [queueSubTab, setQueueSubTab] = useState<'QUEUE' | 'RELATED'>('QUEUE');
   const [relatedSongs, setRelatedSongs] = useState<Song[]>([]);
   const [isLoadingRelated, setIsLoadingRelated] = useState(false);
   const [addedFeedback, setAddedFeedback] = useState<Record<string, boolean>>({});
@@ -135,57 +133,7 @@ export const MainQueueView: React.FC<MainQueueViewProps> = ({ onClose }) => {
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col relative px-6 md:px-12 lg:px-16 pt-24 pb-32 overflow-hidden select-none">
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0 z-10 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.08] border border-white/10">
-            <button
-              onClick={() => setQueueSubTab('QUEUE')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                queueSubTab === 'QUEUE'
-                  ? 'bg-accent-red text-white shadow-lg'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <ListMusic className="w-4 h-4" />
-              <span>Queue ({queue.length})</span>
-            </button>
-
-            <button
-              onClick={() => setQueueSubTab('RELATED')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                queueSubTab === 'RELATED'
-                  ? 'bg-accent-red text-white shadow-lg'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <Radio className="w-4 h-4" />
-              <span>Related Tracks</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Switch to Lyrics */}
-          <button
-            onClick={() => setNowPlayingTab('LYRICS')}
-            className="px-3.5 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-semibold text-white/80 hover:text-white transition-all cursor-pointer active:scale-95"
-            title="Switch to Lyrics View"
-          >
-            View Lyrics
-          </button>
-          {/* Close button returning to feed */}
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/[0.08] hover:bg-white/[0.18] border border-white/15 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer active:scale-95"
-            title="Close & Back to Feed"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
+    <div className="flex-1 h-full flex flex-col relative px-4 sm:px-8 lg:px-12 pt-1 pb-16 overflow-hidden select-none">
       {/* SUB-TAB 1: Up Next Queue */}
       {queueSubTab === 'QUEUE' && (
         <div className="flex-1 flex flex-col overflow-hidden max-w-4xl mx-auto w-full">

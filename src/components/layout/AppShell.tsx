@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Music2, ListMusic, Radio, X } from 'lucide-react';
 import { DesktopSidebar, NavTab } from './DesktopSidebar';
 import { GlassNavBar } from './GlassNavBar';
 import { FrostedTopBar } from './FrostedTopBar';
@@ -26,7 +26,7 @@ import { useSearchStore } from '../../stores/searchStore';
 import { cleanThumbnailUrl } from '../../utils/thumbnail';
 
 export const AppShell: React.FC = () => {
-  const { currentSong, nowPlayingTab, setNowPlayingTab } = usePlayerStore();
+  const { currentSong, nowPlayingTab, setNowPlayingTab, queue, queueSubTab, setQueueSubTab } = usePlayerStore();
   const { results: searchResults } = useSearchStore();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [isScrolled, setIsScrolled] = useState(false);
@@ -162,7 +162,7 @@ export const AppShell: React.FC = () => {
 
   const getTitle = () => {
     if (nowPlayingTab === 'LYRICS') return 'Lyrics';
-    if (nowPlayingTab === 'QUEUE') return 'Up Next Queue';
+    if (nowPlayingTab === 'QUEUE') return 'Up Next';
     if (selectedBrowse) return selectedBrowse.title || 'Collection';
     switch (currentTab) {
       case 'home':
@@ -317,9 +317,92 @@ export const AppShell: React.FC = () => {
         {/* Floating FrostedTopBar over TopFadeBlur */}
         <FrostedTopBar
           title={getTitle()}
-          isSearch={currentTab === 'search' && !selectedBrowse}
+          subtitle={
+            nowPlayingTab === 'LYRICS' && currentSong
+              ? `${currentSong.title} • ${currentSong.artist}`
+              : undefined
+          }
+          badge={
+            nowPlayingTab === 'QUEUE' ? (
+              <span className="text-xs text-white/50 font-normal">({queue.length})</span>
+            ) : undefined
+          }
+          isSearch={currentTab === 'search' && !selectedBrowse && nowPlayingTab === 'PLAYER'}
           scrolled={isScrolled}
-          onBack={selectedBrowse ? goBack : undefined}
+          onBack={
+            nowPlayingTab !== 'PLAYER'
+              ? () => setNowPlayingTab('PLAYER')
+              : selectedBrowse
+              ? goBack
+              : undefined
+          }
+          centerSlot={
+            nowPlayingTab === 'QUEUE' ? (
+              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/[0.08] border border-white/10 backdrop-blur-xl">
+                <button
+                  onClick={() => setQueueSubTab('QUEUE')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    queueSubTab === 'QUEUE'
+                      ? 'bg-accent-red text-white shadow-md'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  <ListMusic className="w-3.5 h-3.5" />
+                  <span>Queue ({queue.length})</span>
+                </button>
+                <button
+                  onClick={() => setQueueSubTab('RELATED')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    queueSubTab === 'RELATED'
+                      ? 'bg-accent-red text-white shadow-md'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  <Radio className="w-3.5 h-3.5" />
+                  <span>Related Tracks</span>
+                </button>
+              </div>
+            ) : undefined
+          }
+          rightSlot={
+            nowPlayingTab === 'LYRICS' ? (
+              <div className="flex items-center gap-1.5 mr-1">
+                <button
+                  onClick={() => setNowPlayingTab('QUEUE')}
+                  className="px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-semibold text-white/90 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+                  title="Switch to Up Next Queue"
+                >
+                  <ListMusic className="w-3.5 h-3.5 text-accent-red" />
+                  <span>Queue</span>
+                </button>
+                <button
+                  onClick={() => setNowPlayingTab('PLAYER')}
+                  className="w-8 h-8 rounded-full bg-white/[0.08] hover:bg-white/[0.18] border border-white/15 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer active:scale-95"
+                  title="Close Lyrics & Back to Feed"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : nowPlayingTab === 'QUEUE' ? (
+              <div className="flex items-center gap-1.5 mr-1">
+                <button
+                  onClick={() => setNowPlayingTab('LYRICS')}
+                  className="px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-semibold text-white/90 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+                  title="Switch to Lyrics"
+                >
+                  <Music2 className="w-3.5 h-3.5 text-accent-red" />
+                  <span>Lyrics</span>
+                </button>
+                <button
+                  onClick={() => setNowPlayingTab('PLAYER')}
+                  className="w-8 h-8 rounded-full bg-white/[0.08] hover:bg-white/[0.18] border border-white/15 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer active:scale-95"
+                  title="Close Queue & Back to Feed"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : undefined
+          }
           className="absolute top-0 left-0 right-0 z-30"
           onOpenSettings={() => setShowSettings(true)}
           onOpenEqualizer={() => setShowEqualizer(true)}

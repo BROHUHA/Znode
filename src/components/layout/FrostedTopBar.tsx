@@ -19,9 +19,13 @@ import { SearchFilterType } from '../../types';
 
 interface FrostedTopBarProps {
   title: string;
+  subtitle?: React.ReactNode;
+  badge?: React.ReactNode;
   isSearch?: boolean;
   scrolled?: boolean;
   onBack?: () => void;
+  centerSlot?: React.ReactNode;
+  rightSlot?: React.ReactNode;
   onOpenSettings: () => void;
   onOpenEqualizer: () => void;
   onOpenListenTogether: () => void;
@@ -49,9 +53,13 @@ const FILTERS: { id: SearchFilterType; label: string }[] = [
 
 export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
   title,
+  subtitle,
+  badge,
   isSearch = false,
   scrolled: _scrolled = false,
   onBack,
+  centerSlot,
+  rightSlot,
   onOpenSettings,
   onOpenEqualizer,
   onOpenListenTogether,
@@ -197,7 +205,7 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
         {/* Left Side: Detail Back Button OR Large Display Heading (Clean, no menu button here) */}
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           {onBack ? (
-            <div className="flex items-center gap-2.5 pointer-events-auto">
+            <div className="flex items-center gap-2.5 pointer-events-auto min-w-0">
               <button
                 onClick={onBack}
                 className="p-2 rounded-xl liquid-glass-pill transition-all cursor-pointer flex items-center justify-center text-white/90 hover:text-white active:scale-95 shrink-0"
@@ -206,19 +214,30 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
               >
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white truncate">
-                {title}
-              </h1>
+              <div className="min-w-0 flex flex-col justify-center">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white truncate">
+                    {title}
+                  </h1>
+                  {badge}
+                </div>
+                {subtitle && (
+                  <div className="text-xs text-white/60 truncate mt-0.5">
+                    {subtitle}
+                  </div>
+                )}
+              </div>
             </div>
           ) : isSearch ? (
             /* On search, left is kept clean */
             null
           ) : (
             /* Large Display Heading as Header */
-            <div className="flex items-center pointer-events-auto min-w-0">
+            <div className="flex items-center gap-2.5 pointer-events-auto min-w-0">
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white truncate">
                 {title}
               </h1>
+              {badge}
             </div>
           )}
         </div>
@@ -471,8 +490,16 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
           </div>
         )}
 
+        {/* Center Slot: Optional custom center content (e.g. queue subtabs) */}
+        {!isSearch && centerSlot && (
+          <div className="flex-1 min-w-0 flex items-center justify-center pointer-events-auto mx-2">
+            {centerSlot}
+          </div>
+        )}
+
         {/* Right Side: Authentic Branded Znode Music Logo (Transparent White Liquid Glass Circle) */}
-        <div className="relative pointer-events-auto flex items-center shrink-0" ref={menuRef}>
+        <div className="relative pointer-events-auto flex items-center gap-2 shrink-0" ref={menuRef}>
+          {rightSlot}
           {/* Active Sleep Timer Badge (Live countdown pill) */}
           {(sleepTimerEndTime || sleepTimerEndOfTrack) && onOpenSleepTimer && (
             <button

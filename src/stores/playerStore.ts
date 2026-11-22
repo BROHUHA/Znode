@@ -111,6 +111,8 @@ interface PlayerState {
   // Responsive UI States
   isNowPlayingOpen: boolean;
   nowPlayingTab: 'PLAYER' | 'LYRICS' | 'QUEUE';
+  queueSubTab: 'QUEUE' | 'RELATED';
+  setQueueSubTab: (tab: 'QUEUE' | 'RELATED') => void;
 
   // Sleep Timer
   sleepTimerEndTime: number | null;
@@ -263,6 +265,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     likeStatuses: {},
     isNowPlayingOpen: false,
     nowPlayingTab: 'PLAYER',
+    queueSubTab: 'QUEUE',
+    setQueueSubTab: (tab) => set({ queueSubTab: tab }),
     sleepTimerEndTime: null,
     sleepTimerDurationMinutes: null,
     sleepTimerEndOfTrack: false,

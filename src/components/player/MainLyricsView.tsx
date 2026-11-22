@@ -2,14 +2,14 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { LyricLine } from '../../types';
 import { lyricsService } from '../../services/lyricsService';
 import { usePlayerStore } from '../../stores/playerStore';
-import { Music2, ChevronDown, Sparkles, X, RotateCw } from 'lucide-react';
+import { Music2, ChevronDown, Sparkles, RotateCw } from 'lucide-react';
 
 interface MainLyricsViewProps {
-  onClose: () => void;
+  onClose?: () => void;
 }
 
-export const MainLyricsView: React.FC<MainLyricsViewProps> = ({ onClose }) => {
-  const { currentSong, currentTime, duration, seek, setNowPlayingTab } = usePlayerStore();
+export const MainLyricsView: React.FC<MainLyricsViewProps> = () => {
+  const { currentSong, currentTime, duration, seek } = usePlayerStore();
 
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [isLyricsLoading, setIsLyricsLoading] = useState<boolean>(false);
@@ -136,51 +136,33 @@ export const MainLyricsView: React.FC<MainLyricsViewProps> = ({ onClose }) => {
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col relative px-6 md:px-12 lg:px-16 pt-24 pb-32 overflow-hidden select-none">
-      {/* Top Bar inside Feed area */}
-      <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0 z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-accent-red/20 border border-accent-red/30 flex items-center justify-center text-accent-red shadow-lg">
-            <Music2 className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">Lyrics</h2>
-              {isSynced ? (
-                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-accent-red/25 text-accent-red border border-accent-red/40">
-                  <Sparkles className="w-3 h-3" />
-                  Synced
-                </span>
-              ) : lyrics.length > 0 ? (
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-white/60 border border-white/10">
-                  {lyricsSource === 'MUSIXMATCH' ? 'Official' : lyricsSource || 'Plain Text'}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-xs text-white/60 truncate mt-0.5">
-              {currentSong.title} • {currentSong.artist}
-            </p>
-          </div>
+    <div className="flex-1 h-full flex flex-col relative px-4 md:px-8 lg:px-12 pt-1 pb-16 overflow-hidden select-none">
+      {/* Fitted Status Row: Synced Badge + Hint + Reload */}
+      <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/[0.06] text-xs shrink-0 max-w-4xl mx-auto w-full">
+        <div className="flex items-center gap-2">
+          {isSynced ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
+              <Sparkles className="w-3 h-3" />
+              Real-Time Synced
+            </span>
+          ) : lyrics.length > 0 ? (
+            <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-white/60 border border-white/10">
+              {lyricsSource === 'MUSIXMATCH' ? 'Official' : lyricsSource || 'Plain Text'}
+            </span>
+          ) : null}
+          <span className="text-white/30 hidden sm:inline">•</span>
+          <span className="text-white/50 text-xs truncate hidden sm:inline">Click any line to jump to that moment</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Switch to Queue in Main Screen */}
-          <button
-            onClick={() => setNowPlayingTab('QUEUE')}
-            className="px-3.5 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-semibold text-white/80 hover:text-white transition-all cursor-pointer active:scale-95"
-            title="Switch to Up Next Queue"
-          >
-            View Queue
-          </button>
-          {/* Close button returning to feed */}
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/[0.08] hover:bg-white/[0.18] border border-white/15 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer active:scale-95"
-            title="Close Lyrics & Back to Feed"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          onClick={retryFetch}
+          disabled={isLyricsLoading}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/10 text-[11px] font-medium text-white/60 hover:text-white transition-colors cursor-pointer border border-white/10"
+          title="Refresh Lyrics"
+        >
+          <RotateCw className={`w-3 h-3 ${isLyricsLoading ? 'animate-spin' : ''}`} />
+          <span>Reload</span>
+        </button>
       </div>
 
       {/* Lyrics Body */}
@@ -203,7 +185,7 @@ export const MainLyricsView: React.FC<MainLyricsViewProps> = ({ onClose }) => {
               WebkitMaskImage:
                 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
             }}
-            className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-7 py-32 px-4 scroll-smooth max-w-4xl mx-auto w-full"
+            className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-6 sm:gap-7 py-12 px-4 scroll-smooth max-w-4xl mx-auto w-full"
           >
             {/* Instrumental Intro indicator */}
             {isSynced && lyrics[0]?.startTimeMs > 4000 && currentTime * 1000 < lyrics[0].startTimeMs && (
