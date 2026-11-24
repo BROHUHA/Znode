@@ -101,133 +101,119 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
     <nav
       aria-label="Mobile Navigation"
       style={{
-        transition: 'opacity 280ms ease, transform 340ms cubic-bezier(0.22, 1, 0.36, 1)',
+        transition: 'opacity 320ms cubic-bezier(0.32, 0.72, 0, 1), transform 380ms cubic-bezier(0.32, 0.72, 0, 1)',
       }}
-      className={`md:hidden fixed bottom-3 inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-none ${
-        isNowPlayingOpen ? 'opacity-0 translate-y-12' : 'opacity-100 translate-y-0'
+      className={`md:hidden fixed bottom-3 inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-none origin-bottom ${
+        isNowPlayingOpen ? 'opacity-0 scale-[0.94] translate-y-2' : 'opacity-100 scale-100 translate-y-0'
       }`}
     >
-      {/* Grid stack anchored at bottom: both bars share cell [1/1] with zero position:relative/absolute snap */}
-      <div className="grid grid-cols-1 items-end w-full">
-        {/* 1. ExpandedBar: Liquid Glass Morph */}
-        <div
-          style={{
-            transition:
-              'opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1)',
-            willChange: 'transform, opacity',
-          }}
-          className={`col-start-1 row-start-1 flex flex-col items-center gap-2 w-full origin-bottom ${
-            !isInline && !isNowPlayingOpen
-              ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto z-10'
-              : 'opacity-0 scale-[0.95] translate-y-3 pointer-events-none z-0'
-          }`}
-        >
-          {/* Expanded Accessory: Full-width player pill */}
-          {currentSong && <MiniPlayer isInline={false} />}
-
-          {/* Tab Row: [Home, Explore, Library pill] + [Search circle] */}
-          <div className="flex items-center gap-2 w-full">
-            <div className="h-14 rounded-full liquid-glass-surface flex-1 p-1.5 grid grid-cols-3 items-center relative overflow-hidden">
-              {/* Gliding iOS 26 Liquid Glass Active Pill */}
-              {activeTabIndex >= 0 && (
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-y-1.5 left-1.5 w-[calc((100%-12px)/3)] rounded-full pointer-events-none z-0 liquid-glass-tab-pill will-change-transform"
-                  style={{
-                    transform: `translateX(${activeTabIndex * 100}%)`,
-                    transition: 'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease',
-                  }}
-                />
-              )}
-
-              {tabs.map((tab) => {
-                const isActive = currentTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => onSelectTab(tab.id)}
-                    className={`relative z-10 flex flex-col items-center justify-center h-full rounded-full transition-all duration-200 cursor-pointer ${
-                      isActive
-                        ? 'text-white scale-[1.03] drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] font-bold'
-                        : 'text-white/60 hover:text-white active:scale-95 font-medium'
-                    }`}
-                  >
-                    <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                      {renderTabIcon(tab.id, isActive)}
-                    </div>
-                    <span className="text-[10.5px] tracking-tight leading-none mt-0.5">
-                      {tab.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Standalone Search Circle */}
-            <button
-              onClick={() => onSelectTab('search')}
-              className={`w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 active:scale-90 transition-all duration-200 cursor-pointer ${
-                isSearchActive
-                  ? 'text-white ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.25)]'
-                  : 'text-white/75 hover:text-white'
-              }`}
-              title="Search"
-              aria-label="Search"
-            >
-              <div className="relative z-10 w-6 h-6 flex items-center justify-center">
-                {renderTabIcon('search', isSearchActive)}
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. InlineBar: Liquid Glass Morph into single 56px row on scroll down */}
-        <div
-          style={{
-            transition:
-              'opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1)',
-            willChange: 'transform, opacity',
-          }}
-          className={`col-start-1 row-start-1 self-end flex items-center gap-2 w-full origin-bottom ${
-            isInline && !isNowPlayingOpen
-              ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto z-10'
-              : 'opacity-0 scale-[0.95] -translate-y-2 pointer-events-none z-0'
-          } ${!currentSong ? 'justify-center max-w-[130px] mx-auto' : ''}`}
-        >
-          {/* InlineTab: Single Active Tab Circle (Tap to expand) */}
-          <button
-            onClick={onExpand}
-            className="w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 cursor-pointer active:scale-90 hover:scale-105 transition-transform duration-150"
-            title="Tap to expand navigation tabs"
-            aria-label="Expand tabs"
-          >
-            <div className="relative z-10 w-6 h-6 flex items-center justify-center text-white scale-105 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
-              {renderTabIcon(currentTab === 'search' ? 'home' : currentTab, true)}
-            </div>
-          </button>
-
-          {/* InlineAccessory: Compact MiniPlayer (takes remaining center space) */}
-          {currentSong && <MiniPlayer isInline={true} className="flex-1 min-w-0" />}
-
-          {/* Standalone Search Circle */}
-          <button
-            onClick={() => {
-              onExpand();
-              onSelectTab('search');
+      {/* Shared-Element Morph Stage matching YZ-Music FloatingTabBar.kt */}
+      <div className="relative w-full h-[120px]">
+        {/* 1. Single MiniPlayer Pill: glides down & narrows from full-width (bottom: 64px) into inline center slot (bottom: 0, left/right: 64px) */}
+        {currentSong && (
+          <div
+            style={{
+              bottom: isInline ? 0 : 64,
+              left: isInline ? 64 : 0,
+              right: isInline ? 64 : 0,
+              transition:
+                'bottom 420ms cubic-bezier(0.32, 0.72, 0, 1), left 420ms cubic-bezier(0.32, 0.72, 0, 1), right 420ms cubic-bezier(0.32, 0.72, 0, 1)',
+              willChange: 'bottom, left, right',
             }}
-            className={`w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 active:scale-90 transition-transform duration-150 cursor-pointer ${
-              isSearchActive
-                ? 'text-white ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.25)]'
-                : 'text-white/75 hover:text-white'
-            }`}
-            title="Search"
-            aria-label="Search"
+            className={`absolute h-14 z-20 ${isNowPlayingOpen ? 'pointer-events-none' : 'pointer-events-auto'}`}
           >
-            <div className="relative z-10 w-6 h-6 flex items-center justify-center">
-              {renderTabIcon('search', isSearchActive)}
-            </div>
-          </button>
+            <MiniPlayer isInline={isInline} />
+          </div>
+        )}
+
+        {/* 2. Single Tab Pill: morphs smoothly between full-width 3-tab pill and 56px active-tab circle */}
+        <div
+          onClick={isInline ? onExpand : undefined}
+          style={{
+            width: isInline ? 56 : 'calc(100% - 64px)',
+            transition: 'width 420ms cubic-bezier(0.32, 0.72, 0, 1)',
+            willChange: 'width',
+          }}
+          className={`!absolute bottom-0 left-0 h-14 rounded-full liquid-glass-surface flex items-center overflow-hidden z-10 ${
+            isInline ? 'justify-center cursor-pointer active:scale-[1.03]' : 'p-1.5'
+          } ${isNowPlayingOpen ? 'pointer-events-none' : 'pointer-events-auto'}`}
+          title={isInline ? 'Tap to expand navigation tabs' : undefined}
+        >
+          {/* Gliding Active Pill (visible in expanded mode) */}
+          {activeTabIndex >= 0 && (
+            <div
+              aria-hidden="true"
+              className="absolute inset-y-1.5 left-1.5 w-[calc((100%-12px)/3)] rounded-full pointer-events-none z-0 liquid-glass-tab-pill will-change-transform"
+              style={{
+                transform: `translateX(${activeTabIndex * 100}%)`,
+                opacity: isInline ? 0 : 1,
+                transition: 'transform 400ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 200ms ease',
+              }}
+            />
+          )}
+
+          {tabs.map((tab) => {
+            const isActive = currentTab === tab.id || (currentTab === 'search' && tab.id === 'home');
+            const isVisibleInInline = isInline && isActive;
+
+            return (
+              <button
+                key={tab.id}
+                onClick={(e) => {
+                  if (isInline) {
+                    e.stopPropagation();
+                    onExpand();
+                  } else {
+                    onSelectTab(tab.id);
+                  }
+                }}
+                className={`relative z-10 flex flex-col items-center justify-center h-full rounded-full transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer overflow-hidden ${
+                  isInline
+                    ? isVisibleInInline
+                      ? 'w-14 opacity-100 scale-100 text-white'
+                      : 'w-0 opacity-0 scale-75 pointer-events-none'
+                    : `flex-1 ${
+                        currentTab === tab.id
+                          ? 'text-white scale-[1.03] drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] font-bold'
+                          : 'text-white/60 hover:text-white active:scale-95 font-medium'
+                      }`
+                }`}
+              >
+                <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                  {renderTabIcon(tab.id, currentTab === tab.id || isVisibleInInline)}
+                </div>
+                <span
+                  className={`text-[10.5px] tracking-tight leading-none transition-all duration-200 overflow-hidden ${
+                    isInline ? 'max-h-0 opacity-0 mt-0' : 'max-h-4 opacity-100 mt-0.5'
+                  }`}
+                >
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
+
+        {/* 3. Standalone Search Circle (anchored bottom-right, always persistent) */}
+        <button
+          onClick={() => {
+            if (isInline) onExpand();
+            onSelectTab('search');
+          }}
+          className={`!absolute bottom-0 right-0 w-14 h-14 rounded-full liquid-glass-surface overflow-hidden flex items-center justify-center active:scale-[1.03] transition-all duration-200 ease-[cubic-bezier(0.34,1.45,0.64,1)] cursor-pointer z-10 ${
+            isNowPlayingOpen ? 'pointer-events-none' : 'pointer-events-auto'
+          } ${
+            isSearchActive
+              ? 'text-white ring-2 ring-white/40 shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+              : 'text-white/75 hover:text-white'
+          }`}
+          title="Search"
+          aria-label="Search"
+        >
+          <div className="relative z-10 w-6 h-6 flex items-center justify-center">
+            {renderTabIcon('search', isSearchActive)}
+          </div>
+        </button>
       </div>
     </nav>
   );

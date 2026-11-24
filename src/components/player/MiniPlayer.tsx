@@ -109,97 +109,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
     setOffsetX(0);
   };
 
-  // Compact Inline Mode (single 56px row accessory between Tab circle and Search circle)
-  if (isInline) {
-    return (
-      <div
-        onClick={() => setNowPlayingOpen(true)}
-        className={`h-14 rounded-full liquid-glass-surface px-2.5 flex items-center gap-2.5 min-w-0 cursor-pointer active:scale-[0.98] transition-transform overflow-hidden shadow-2xl relative group ${className}`}
-      >
-        {/* Flush curved bottom seekbar */}
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!duration) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            seek(ratio * duration);
-          }}
-          className="absolute bottom-0 inset-x-0 h-3 flex items-end cursor-pointer z-20 group/seek"
-          title="Seek"
-        >
-          <div className="w-full h-[2.5px] group-hover/seek:h-[3.5px] bg-white/15 transition-all duration-150 overflow-hidden">
-            <div
-              className="h-full transition-[width] duration-200 ease-linear relative"
-              style={{
-                width: `${progressPercent}%`,
-                background: `linear-gradient(90deg, ${accentColor} 0%, #FA2D48 85%, #ffffff 100%)`,
-                boxShadow: `0 0 8px ${accentColor}99`,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* 34px Album Artwork */}
-        <div className="w-[34px] h-[34px] rounded-xl overflow-hidden shrink-0 bg-white/10 border border-white/20 shadow-sm flex items-center justify-center">
-          {!isImgBroken ? (
-            <img
-              key={`thumb-inline-${currentSong?.videoId || thumbSrc}`}
-              src={thumbSrc}
-              alt={currentSong.title}
-              referrerPolicy="no-referrer"
-              onError={handleThumbnailError}
-              className="w-full h-full object-cover animate-artwork-fade"
-            />
-          ) : (
-            <div
-              className="w-full h-full flex items-center justify-center text-white/70"
-              style={{ backgroundColor: `${accentColor}33` }}
-            >
-              <Music2 className="w-4 h-4 text-accent-red" />
-            </div>
-          )}
-        </div>
-
-        {/* Compact Title & Live Equalizer Waveform */}
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-hidden">
-          <span className="text-[12.5px] font-bold text-white truncate leading-tight drop-shadow-sm group-hover:text-accent-red transition-colors">
-            {currentSong.title}
-          </span>
-          {isPlaying && (
-            <div className="flex items-end gap-[1.5px] h-3 shrink-0 pb-0.5">
-              <div
-                className="w-[2px] rounded-full playing-eq-bar-1"
-                style={{ backgroundColor: accentColor }}
-              />
-              <div
-                className="w-[2px] rounded-full playing-eq-bar-2"
-                style={{ backgroundColor: accentColor }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Compact Tactile Play / Pause Button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            togglePlay();
-          }}
-          className="w-9 h-9 rounded-full liquid-glass-circle flex items-center justify-center text-white active:scale-90 hover:scale-105 transition-all shrink-0 cursor-pointer ml-auto"
-          aria-label={isPlaying ? 'Pause' : 'Play'}
-        >
-          {isPlaying ? (
-            <Pause className="w-3.5 h-3.5 fill-white" />
-          ) : (
-            <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
-          )}
-        </button>
-      </div>
-    );
-  }
-
-  // Expanded Mode (64px full-width card above the navigation tabs)
+  // Unified Single-Pill Layout: smoothly morphs artwork, artist line, and controls between Expanded & Inline without unmounting
   return (
     <div
       onClick={() => setNowPlayingOpen(true)}
@@ -208,9 +118,9 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
       onTouchEnd={handleTouchEnd}
       style={{
         transform: offsetX !== 0 ? `translateX(${offsetX}px)` : undefined,
-        transition: offsetX === 0 ? 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
+        transition: offsetX === 0 ? 'transform 0.38s cubic-bezier(0.34, 1.45, 0.64, 1)' : 'none',
       }}
-      className={`relative w-full h-[64px] rounded-full liquid-glass-surface px-3 sm:px-3.5 flex items-center justify-between cursor-pointer group active:scale-[0.99] transition-transform overflow-hidden ${className}`}
+      className={`relative w-full h-14 rounded-full liquid-glass-surface px-3 flex items-center justify-between cursor-pointer group active:scale-[1.03] transition-transform duration-200 ease-[cubic-bezier(0.34,1.45,0.64,1)] overflow-hidden ${className}`}
     >
       {/* Flush curved bottom seekbar */}
       <div
@@ -244,9 +154,13 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
         }}
       />
 
-      {/* Left Section: 44px Artwork Squircle + Title & Artist + EQ Waveform */}
+      {/* Left Section: Artwork (40px -> 34px) + Title & Artist + EQ Waveform */}
       <div className="flex items-center min-w-0 flex-1 mr-2 relative z-10">
-        <div className="relative w-11 h-11 rounded-2xl overflow-hidden shrink-0 shadow-md bg-white/10 border border-white/25 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
+        <div
+          className={`relative rounded-lg overflow-hidden shrink-0 shadow-md bg-white/10 border border-white/15 group-hover:scale-105 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex items-center justify-center ${
+            isInline ? 'w-[34px] h-[34px]' : 'w-10 h-10'
+          }`}
+        >
           {!isImgBroken ? (
             <img
               key={`thumb-expanded-${currentSong?.videoId || thumbSrc}`}
@@ -267,9 +181,13 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
           )}
         </div>
 
-        <div className="flex-1 min-w-0 ml-3 overflow-hidden">
+        <div className={`flex-1 min-w-0 overflow-hidden transition-all duration-300 ${isInline ? 'ml-2.5' : 'ml-3'}`}>
           <div className="flex items-center gap-1.5">
-            <h4 className="text-[13.5px] sm:text-sm font-bold text-white truncate leading-tight tracking-tight drop-shadow-sm group-hover:text-accent-red transition-colors">
+            <h4
+              className={`font-bold text-white truncate leading-tight tracking-tight drop-shadow-sm group-hover:text-accent-red transition-colors ${
+                isInline ? 'text-[12.5px]' : 'text-[13.5px] sm:text-sm'
+              }`}
+            >
               {currentSong.title}
             </h4>
 
@@ -299,22 +217,26 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
             </div>
           </div>
 
-          <p className="text-[11.5px] text-white/65 truncate leading-tight mt-0.5 tracking-tight font-medium">
+          <p
+            className={`text-[11.5px] text-white/65 truncate leading-tight tracking-tight font-medium transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden ${
+              isInline ? 'max-h-0 opacity-0 mt-0' : 'max-h-5 opacity-100 mt-0.5'
+            }`}
+          >
             {currentSong.artist}
           </p>
         </div>
       </div>
 
-      {/* Right Controls: Like, Play/Pause, Next */}
+      {/* Right Controls: Like (collapses in inline), Play/Pause, Next (collapses in inline) */}
       <div
-        className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative z-10"
+        className="flex items-center gap-1 shrink-0 relative z-10"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={() => toggleLike(currentSong.videoId)}
-          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-80 hover:bg-white/10 ${
-            isLiked ? 'text-accent-red fill-accent-red animate-like' : 'text-white/60 hover:text-white'
-          }`}
+          className={`h-9 rounded-full flex items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer active:scale-80 hover:bg-white/10 ${
+            isInline ? 'w-0 opacity-0 scale-75 overflow-hidden pointer-events-none' : 'w-9 opacity-100 scale-100'
+          } ${isLiked ? 'text-accent-red fill-accent-red animate-like' : 'text-white/60 hover:text-white'}`}
           aria-label={isLiked ? 'Unlike' : 'Like'}
         >
           <Heart className={`w-[18px] h-[18px] ${isLiked ? 'fill-accent-red text-accent-red' : ''}`} />
@@ -322,7 +244,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
 
         <button
           onClick={togglePlay}
-          className="w-10 h-10 rounded-full liquid-glass-circle flex items-center justify-center text-white active:scale-90 hover:scale-105 transition-all cursor-pointer ml-0.5"
+          className="w-9 h-9 rounded-full liquid-glass-circle flex items-center justify-center text-white active:scale-90 hover:scale-105 transition-all cursor-pointer shrink-0"
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
@@ -334,7 +256,9 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
 
         <button
           onClick={next}
-          className="w-9 h-9 rounded-full hover:bg-white/10 active:scale-85 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
+          className={`h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer active:scale-85 ${
+            isInline ? 'w-0 opacity-0 scale-75 overflow-hidden pointer-events-none' : 'w-9 opacity-100 scale-100'
+          }`}
           aria-label="Next track"
         >
           <SkipForward className="w-[18px] h-[18px] fill-current" />

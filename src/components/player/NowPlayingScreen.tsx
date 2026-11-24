@@ -227,20 +227,28 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
     animRef.current = requestAnimationFrame(tick);
   };
 
-  // Smooth dismiss animation (slide out with deceleration)
+  // Smooth dismiss animation: blends & shrinks down directly into the MiniPlayer pill
   const animateDismiss = (from: number, velocity: number) => {
     setIsSpringBack(true);
     let pos = from;
-    const target = window.innerHeight * 1.1;
-    const vel = Math.max(velocity, 8);
+    const target = Math.max(260, window.innerHeight - 96);
+    let vel = Math.max(velocity, 16);
+    let hasNotifiedClose = false;
 
     const tick = () => {
+      vel = Math.max(12, vel * 0.96);
       pos += vel;
       const progress = Math.min(1, pos / target);
       setSwipeY(pos);
 
-      if (progress >= 1) {
+      // Start revealing the MiniPlayer pill as the sheet docks into it
+      if (progress >= 0.55 && !hasNotifiedClose) {
+        hasNotifiedClose = true;
         setNowPlayingOpen(false);
+      }
+
+      if (progress >= 1) {
+        if (!hasNotifiedClose) setNowPlayingOpen(false);
         setSwipeY(0);
         setIsSpringBack(false);
         return;
@@ -814,18 +822,37 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
     : `fixed inset-0 z-50 flex flex-col text-white select-none overflow-hidden ${!isNowPlayingOpen && swipeY === 0 ? 'pointer-events-none' : ''
     }`;
 
+  const dragProgress = !isDocked && swipeY > 0 ? Math.min(1, swipeY / 360) : 0;
+
   return (
     <div
       className={containerClasses}
       style={{
         backgroundColor: isDocked ? 'transparent' : (palette.darkBase || '#180a0e'),
         transform: !isDocked && isNowPlayingOpen
-          ? `translateY(${swipeY}px) scale(${1 - Math.abs(swipeY) * 0.00025})`
-          : !isDocked && !isNowPlayingOpen ? 'translateY(100%)' : undefined,
-        transition: isSpringBack ? 'none' : (swipeY !== 0 ? 'none' : 'transform 0.5s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease'),
-        borderRadius: Math.abs(swipeY) > 8 ? `${Math.min(Math.abs(swipeY) / 3, 32)}px` : undefined,
-        opacity: !isDocked && !isNowPlayingOpen && swipeY === 0 ? 0 : 1,
-        willChange: 'transform',
+          ? `translateY(${swipeY}px) scale(${1 - dragProgress * 0.14})`
+          : !isDocked && !isNowPlayingOpen
+          ? 'translateY(56px) scale(0.90)'
+          : undefined,
+        transformOrigin: 'center bottom',
+        transition: isSpringBack
+          ? 'none'
+          : swipeY !== 0
+          ? 'none'
+          : 'transform 0.44s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.32s ease, border-radius 0.4s ease',
+        borderRadius: !isDocked
+          ? !isNowPlayingOpen
+            ? '36px'
+            : dragProgress > 0.02
+            ? `${Math.min(dragProgress * 44, 44)}px`
+            : undefined
+          : undefined,
+        opacity: !isDocked
+          ? !isNowPlayingOpen
+            ? 0
+            : Math.max(0.15, 1 - dragProgress * 0.45)
+          : 1,
+        willChange: 'transform, opacity',
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -983,28 +1010,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               </p>
             </div>
 
-            {/* Sleep Timer icon in header */}
-            {onOpenSleepTimer ? (
-              <button
-                onClick={onOpenSleepTimer}
-                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer ${sleepTimerEndTime || sleepTimerEndOfTrack
-                  ? 'bg-accent-red/20 text-accent-red border border-accent-red/40 shadow-[0_0_12px_rgba(250,45,72,0.3)] animate-pulse'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-                  }`}
-                title={
-                  sleepTimerEndOfTrack
-                    ? 'Sleep timer: End of track'
-                    : sleepTimerEndTime
-                      ? `Sleep timer: ${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`
-                      : 'Sleep Timer'
-                }
-                aria-label="Sleep Timer"
-              >
-                <Moon className={`w-4.5 h-4.5 ${sleepTimerEndTime || sleepTimerEndOfTrack ? 'fill-accent-red' : ''}`} />
-              </button>
-            ) : (
-              <div className="w-9 h-9 pointer-events-none" />
-            )}
+            <div className="w-9 h-9 pointer-events-none" />
           </div>
         )}
 
@@ -1069,26 +1075,13 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                 </div>
               </div>
 
-              {/* Lyrics Link Chip — Apple Music style: ♫ Lyrics > */}
-              <div className="w-full flex items-center justify-start mt-1 mb-1.5">
-                <button
-                  onClick={() => setNowPlayingTab('LYRICS')}
-                  className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-[13px] font-medium transition-all active:scale-95 group cursor-pointer"
-                >
-                  <span className="text-xs text-white/80">♫</span>
-                  <span>Lyrics</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-white/40 group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              </div>
-            </div>
-
-            {/* Lyrics Link Chip — Live lyric preview if available, else ♫ Lyrics > */}
+              {/* Lyrics Link Chip — Live lyric preview if available, else ♫ Lyrics > */}
             {(() => {
               const previewText =
                 lyrics.length > 0
                   ? (isSynced && activeLyricIndex >= 0
-                      ? lyrics[activeLyricIndex]?.words?.trim()
-                      : undefined) || lyrics.find((l) => l.words?.trim())?.words?.trim()
+                    ? lyrics[activeLyricIndex]?.words?.trim()
+                    : undefined) || lyrics.find((l) => l.words?.trim())?.words?.trim()
                   : undefined;
 
               return (
@@ -1107,285 +1100,426 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               );
             })()}
           </div>
-          </>
+      </>
         )}
 
-        {/* VIEW B: Real-Time Synchronized Lyrics View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
-        {!isDocked && nowPlayingTab === 'LYRICS' && (
-          <div className="flex-1 flex flex-col overflow-hidden my-auto py-2 relative np-tab-enter">
-            {isLyricsLoading ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-white/60 gap-3">
-                <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-accent-red animate-spin" />
-                <span className="text-xs font-semibold tracking-wider uppercase text-white/50">Fetching Lyrics...</span>
+      {/* VIEW B: Real-Time Synchronized Lyrics View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
+      {!isDocked && nowPlayingTab === 'LYRICS' && (
+        <div className="flex-1 flex flex-col overflow-hidden my-auto py-2 relative np-tab-enter">
+          {isLyricsLoading ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-white/60 gap-3">
+              <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-accent-red animate-spin" />
+              <span className="text-xs font-semibold tracking-wider uppercase text-white/50">Fetching Lyrics...</span>
+            </div>
+          ) : lyrics.length > 0 ? (
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div
+                ref={lyricsContainerRef}
+                onScroll={(e) => {
+                  handleUserLyricsInteraction();
+                  handleListScroll(e);
+                }}
+                onTouchStart={handleUserLyricsInteraction}
+                onWheel={handleUserLyricsInteraction}
+                style={{
+                  maskImage:
+                    'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
+                  WebkitMaskImage:
+                    'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
+                }}
+                className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-6 py-24 px-2 scroll-smooth"
+                data-scrollable
+              >
+                {/* Instrumental Intro indicator if song is before first lyric */}
+                {isSynced && lyrics[0]?.startTimeMs > 4000 && currentTime * 1000 < lyrics[0].startTimeMs && (
+                  <div className="text-xs font-bold text-white/40 tracking-widest uppercase text-center py-6 animate-pulse flex items-center justify-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent-red animate-ping" />
+                    ••• Instrumental Intro •••
+                  </div>
+                )}
+
+                {lyrics.map((line, idx) => {
+                  const isActive = isSynced && idx === activeLyricIndex;
+                  const isPassed = isSynced && activeLyricIndex > -1 && idx < activeLyricIndex;
+
+                  return (
+                    <p
+                      id={`lyric-line-${idx}`}
+                      key={idx}
+                      onClick={() => handleLyricClick(line, idx)}
+                      className={`text-xl sm:text-2xl font-extrabold cursor-pointer transition-all duration-300 leading-snug tracking-tight select-none ${isActive
+                        ? 'text-white scale-[1.04] origin-left drop-shadow-[0_0_24px_rgba(255,255,255,0.7)] py-2'
+                        : isPassed
+                          ? 'text-white/35 hover:text-white/70 py-1'
+                          : isSynced
+                            ? 'text-white/20 hover:text-white/60 py-1'
+                            : 'text-white/80 hover:text-white py-1'
+                        }`}
+                    >
+                      {line.words}
+                    </p>
+                  );
+                })}
               </div>
-            ) : lyrics.length > 0 ? (
-              <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-                <div
-                  ref={lyricsContainerRef}
-                  onScroll={(e) => {
-                    handleUserLyricsInteraction();
-                    handleListScroll(e);
+
+              {/* Floating "Sync" pill when user has manually scrolled */}
+              {isUserScrolling && activeLyricIndex >= 0 && (
+                <button
+                  onClick={() => {
+                    setIsUserScrolling(false);
+                    scrollToLyricIndex(activeLyricIndex, 'smooth');
                   }}
-                  onTouchStart={handleUserLyricsInteraction}
-                  onWheel={handleUserLyricsInteraction}
-                  style={{
-                    maskImage:
-                      'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
-                    WebkitMaskImage:
-                      'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
-                  }}
-                  className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-6 py-24 px-2 scroll-smooth"
-                  data-scrollable
+                  className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl border border-white/25 text-white text-xs font-semibold shadow-2xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                 >
-                  {/* Instrumental Intro indicator if song is before first lyric */}
-                  {isSynced && lyrics[0]?.startTimeMs > 4000 && currentTime * 1000 < lyrics[0].startTimeMs && (
-                    <div className="text-xs font-bold text-white/40 tracking-widest uppercase text-center py-6 animate-pulse flex items-center justify-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-accent-red animate-ping" />
-                      ••• Instrumental Intro •••
-                    </div>
-                  )}
+                  <ChevronDown className="w-3.5 h-3.5" />
+                  <span>Sync</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-white/40 text-sm gap-3">
+              <Music2 className="w-10 h-10 opacity-30 text-white" />
+              <span className="text-center font-medium max-w-xs">No lyrics found for this track.</span>
+              <button
+                onClick={() => {
+                  setIsLyricsLoading(true);
+                  lyricsService
+                    .getLyrics(currentSong.title, currentSong.artist, duration, currentSong.videoId)
+                    .then((data) => {
+                      setLyrics(data.lines || []);
+                      const hasTimestamps = (data.lines || []).some((l, idx) => idx > 0 && l.startTimeMs > 0);
+                      setIsSynced(!!data.synced && hasTimestamps);
+                      setIsLyricsLoading(false);
+                    });
+                }}
+                className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/15 text-xs font-semibold text-white border border-white/15 active:scale-95 transition-all cursor-pointer"
+              >
+                Retry Search
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
-                  {lyrics.map((line, idx) => {
-                    const isActive = isSynced && idx === activeLyricIndex;
-                    const isPassed = isSynced && activeLyricIndex > -1 && idx < activeLyricIndex;
+      {/* VIEW C: Up Next Queue & Related Music Chart View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
+      {!isDocked && nowPlayingTab === 'QUEUE' && (
+        <div className="flex-1 flex flex-col overflow-hidden my-auto py-2 np-tab-enter">
+          {/* Header: Sub-tabs (Queue vs Related) + Return */}
+          <div className="flex items-center justify-between pb-2 border-b border-white/[0.08] mb-2">
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.06] border border-white/[0.08]">
+              <button
+                onClick={() => setQueueSubTab('QUEUE')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${queueSubTab === 'QUEUE'
+                  ? 'bg-accent-red text-white shadow-md'
+                  : 'text-white/60 hover:text-white'
+                  }`}
+              >
+                <ListMusic className="w-3.5 h-3.5" />
+                <span>Queue ({queue.length})</span>
+              </button>
 
-                    return (
-                      <p
-                        id={`lyric-line-${idx}`}
-                        key={idx}
-                        onClick={() => handleLyricClick(line, idx)}
-                        className={`text-xl sm:text-2xl font-extrabold cursor-pointer transition-all duration-300 leading-snug tracking-tight select-none ${isActive
-                          ? 'text-white scale-[1.04] origin-left drop-shadow-[0_0_24px_rgba(255,255,255,0.7)] py-2'
-                          : isPassed
-                            ? 'text-white/35 hover:text-white/70 py-1'
-                            : isSynced
-                              ? 'text-white/20 hover:text-white/60 py-1'
-                              : 'text-white/80 hover:text-white py-1'
-                          }`}
-                      >
-                        {line.words}
-                      </p>
-                    );
-                  })}
-                </div>
+              <button
+                onClick={() => setQueueSubTab('RELATED')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${queueSubTab === 'RELATED'
+                  ? 'bg-accent-red text-white shadow-md'
+                  : 'text-white/60 hover:text-white'
+                  }`}
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>Related Music</span>
+              </button>
+            </div>
+          </div>
 
-                {/* Floating "Sync" pill when user has manually scrolled */}
-                {isUserScrolling && activeLyricIndex >= 0 && (
+          {/* SUB-TAB 1: Queue with Arrange (Reorder, Remove, Shuffle, Clear) */}
+          {queueSubTab === 'QUEUE' && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Actions Bar */}
+              <div className="flex items-center justify-between px-1 py-1.5 text-xs text-white/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium tracking-wide">
+                    {queue.length > 1 ? `${queue.length} tracks` : '1 track'}
+                  </span>
                   <button
                     onClick={() => {
-                      setIsUserScrolling(false);
-                      scrollToLyricIndex(activeLyricIndex, 'smooth');
+                      if (repeatMode === 'ALL') {
+                        setPlaybackMode('CONTINUE');
+                        setPlaybackModeFeedback('Autoplay: Related Music (Default)');
+                      } else {
+                        setPlaybackMode('REPEAT_ALL');
+                        setPlaybackModeFeedback('Queue Mode: Play Queue');
+                      }
+                      setTimeout(() => setPlaybackModeFeedback(null), 1800);
                     }}
-                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl border border-white/25 text-white text-xs font-semibold shadow-2xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer active:scale-95 border ${repeatMode === 'ALL'
+                      ? 'bg-accent-red text-white border-accent-red shadow-sm'
+                      : 'bg-white/10 hover:bg-white/15 text-white/70 hover:text-white border-white/10'
+                      }`}
+                    title={
+                      repeatMode === 'ALL'
+                        ? 'Queue Mode active: Playing queue tracks in order (Click for Autoplay)'
+                        : 'Autoplay active: Playing related songs (Click to play queue in order)'
+                    }
                   >
-                    <ChevronDown className="w-3.5 h-3.5" />
-                    <span>Sync</span>
+                    <Repeat className="w-2.5 h-2.5" />
+                    <span>{repeatMode === 'ALL' ? 'Queue Mode' : 'Queue Mode Off'}</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {queue.length > 1 && (
+                    <button
+                      onClick={shuffleQueue}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-[11px] font-semibold transition-all cursor-pointer active:scale-95"
+                      title="Shuffle upcoming tracks"
+                    >
+                      <Shuffle className="w-3 h-3" />
+                      <span>Shuffle</span>
+                    </button>
+                  )}
+                  {queue.length > 1 && (
+                    <button
+                      onClick={clearQueue}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/60 hover:text-accent-red text-[11px] font-semibold transition-all cursor-pointer active:scale-95"
+                      title="Clear all tracks except currently playing"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Clear</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Queue List */}
+              <div
+                onScroll={handleListScroll}
+                className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-1.5 py-1"
+                data-scrollable
+              >
+                {queue.map((item, idx) => {
+                  const isCurrent = idx === queueIndex;
+                  const isDragging = draggedIdx === idx;
+                  const isDragOver = dragOverIdx === idx && draggedIdx !== null && draggedIdx !== idx;
+                  return (
+                    <div
+                      key={`${item.videoId}-${idx}`}
+                      data-np-queue-idx={idx}
+                      draggable={!isCurrent}
+                      onDragStart={(e) => {
+                        if (isCurrent) {
+                          e.preventDefault();
+                          return;
+                        }
+                        setDraggedIdx(idx);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', String(idx));
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverIdx !== idx) {
+                          setDragOverIdx(idx);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedIdx !== null && draggedIdx !== idx) {
+                          moveQueueItem(draggedIdx, idx);
+                        }
+                        setDraggedIdx(null);
+                        setDragOverIdx(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedIdx(null);
+                        setDragOverIdx(null);
+                      }}
+                      className={`flex items-center justify-between p-2 rounded-2xl transition-all duration-150 group ${isDragging
+                        ? 'opacity-40 scale-[0.98] bg-white/10 border border-white/25'
+                        : isDragOver
+                          ? 'bg-white/[0.12] border border-accent-red/60 shadow-[0_0_14px_rgba(250,45,72,0.2)]'
+                          : isCurrent
+                            ? 'bg-white/[0.14] border border-white/25 text-white font-semibold shadow-lg'
+                            : 'hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] text-white/70'
+                        }`}
+                    >
+                      <div
+                        onClick={() => playSong(item)}
+                        className="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer min-w-0"
+                      >
+                        <div className="relative w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10">
+                          <img
+                            src={item.thumbnailUrl || (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : '/logo.svg')}
+                            alt={item.title}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              e.currentTarget.src = '/logo.svg';
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                          {isCurrent && (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <div className="w-2 h-2 rounded-full bg-accent-red animate-ping" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="overflow-hidden flex-1 min-w-0">
+                          <p className="text-sm truncate leading-tight font-medium">
+                            {item.title}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden">
+                            {item.isExplicit && (
+                              <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-white/20 text-white/90 uppercase tracking-wider shrink-0">
+                                E
+                              </span>
+                            )}
+                            <p className="text-xs text-white/50 truncate">
+                              {item.artist}
+                            </p>
+                            {item.durationText && (
+                              <>
+                                <span className="text-white/30 text-[10px] shrink-0">•</span>
+                                <span className="text-xs text-white/40 shrink-0 font-mono">
+                                  {item.durationText}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Drag Handle & Remove Controls */}
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {isCurrent ? (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-accent-red/25 text-accent-red border border-accent-red/40">
+                            Now
+                          </span>
+                        ) : (
+                          <>
+                            <div
+                              onTouchStart={() => setDraggedIdx(idx)}
+                              onTouchMove={(e) => {
+                                const touch = e.touches[0];
+                                if (!touch) return;
+                                const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                                const row = el?.closest('[data-np-queue-idx]');
+                                const targetIdx = row ? parseInt(row.getAttribute('data-np-queue-idx') || '', 10) : NaN;
+                                if (!isNaN(targetIdx)) {
+                                  setDragOverIdx(targetIdx);
+                                }
+                              }}
+                              onTouchEnd={() => {
+                                if (draggedIdx !== null && dragOverIdx !== null && draggedIdx !== dragOverIdx) {
+                                  moveQueueItem(draggedIdx, dragOverIdx);
+                                }
+                                setDraggedIdx(null);
+                                setDragOverIdx(null);
+                              }}
+                              className="p-1.5 rounded-lg text-white/35 hover:text-white/80 hover:bg-white/10 cursor-grab active:cursor-grabbing touch-none transition-colors"
+                              title="Drag to reorder"
+                              aria-label="Drag to reorder"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                            <button
+                              onClick={() => removeFromQueue(idx)}
+                              className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-accent-red transition-all cursor-pointer"
+                              title="Remove from queue"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* SUB-TAB 2: Related Music Chart */}
+          {queueSubTab === 'RELATED' && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-1 py-1.5 text-xs text-white/60">
+                <div className="flex items-center gap-2 overflow-hidden mr-2">
+                  <span className="text-[11px] font-medium truncate">
+                    Based on <strong className="text-white">{currentSong.title}</strong>
+                  </span>
+                  <button
+                    onClick={handleRefreshRelated}
+                    disabled={isLoadingRelated}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 hover:bg-white/20 text-white/70 hover:text-white border border-white/10 transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                    title="Refresh related songs"
+                  >
+                    <RotateCw className={`w-2.5 h-2.5 ${isLoadingRelated ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+                {relatedSongs.length > 0 && (
+                  <button
+                    onClick={handleAddAllRelated}
+                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer active:scale-95 shrink-0 ${addedAllFeedback
+                      ? 'bg-green-500/25 text-green-300 border border-green-500/40'
+                      : 'bg-accent-red/20 text-accent-red hover:bg-accent-red hover:text-white border border-accent-red/30'
+                      }`}
+                  >
+                    {addedAllFeedback ? 'Added to Queue' : 'Add All to Queue'}
                   </button>
                 )}
               </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-white/40 text-sm gap-3">
-                <Music2 className="w-10 h-10 opacity-30 text-white" />
-                <span className="text-center font-medium max-w-xs">No lyrics found for this track.</span>
-                <button
-                  onClick={() => {
-                    setIsLyricsLoading(true);
-                    lyricsService
-                      .getLyrics(currentSong.title, currentSong.artist, duration, currentSong.videoId)
-                      .then((data) => {
-                        setLyrics(data.lines || []);
-                        const hasTimestamps = (data.lines || []).some((l, idx) => idx > 0 && l.startTimeMs > 0);
-                        setIsSynced(!!data.synced && hasTimestamps);
-                        setIsLyricsLoading(false);
-                      });
-                  }}
-                  className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/15 text-xs font-semibold text-white border border-white/15 active:scale-95 transition-all cursor-pointer"
-                >
-                  Retry Search
-                </button>
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* VIEW C: Up Next Queue & Related Music Chart View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
-        {!isDocked && nowPlayingTab === 'QUEUE' && (
-          <div className="flex-1 flex flex-col overflow-hidden my-auto py-2 np-tab-enter">
-            {/* Header: Sub-tabs (Queue vs Related) + Return */}
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08] mb-2">
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.06] border border-white/[0.08]">
-                <button
-                  onClick={() => setQueueSubTab('QUEUE')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${queueSubTab === 'QUEUE'
-                    ? 'bg-accent-red text-white shadow-md'
-                    : 'text-white/60 hover:text-white'
-                    }`}
-                >
-                  <ListMusic className="w-3.5 h-3.5" />
-                  <span>Queue ({queue.length})</span>
-                </button>
-
-                <button
-                  onClick={() => setQueueSubTab('RELATED')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${queueSubTab === 'RELATED'
-                    ? 'bg-accent-red text-white shadow-md'
-                    : 'text-white/60 hover:text-white'
-                    }`}
-                >
-                  <Radio className="w-3.5 h-3.5" />
-                  <span>Related Music</span>
-                </button>
-              </div>
-            </div>
-
-            {/* SUB-TAB 1: Queue with Arrange (Reorder, Remove, Shuffle, Clear) */}
-            {queueSubTab === 'QUEUE' && (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Actions Bar */}
-                <div className="flex items-center justify-between px-1 py-1.5 text-xs text-white/50">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-medium tracking-wide">
-                      {queue.length > 1 ? `${queue.length} tracks` : '1 track'}
-                    </span>
-                    <button
-                      onClick={() => {
-                        if (repeatMode === 'ALL') {
-                          setPlaybackMode('CONTINUE');
-                          setPlaybackModeFeedback('Autoplay: Related Music (Default)');
-                        } else {
-                          setPlaybackMode('REPEAT_ALL');
-                          setPlaybackModeFeedback('Queue Mode: Play Queue');
-                        }
-                        setTimeout(() => setPlaybackModeFeedback(null), 1800);
-                      }}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer active:scale-95 border ${repeatMode === 'ALL'
-                        ? 'bg-accent-red text-white border-accent-red shadow-sm'
-                        : 'bg-white/10 hover:bg-white/15 text-white/70 hover:text-white border-white/10'
-                        }`}
-                      title={
-                        repeatMode === 'ALL'
-                          ? 'Queue Mode active: Playing queue tracks in order (Click for Autoplay)'
-                          : 'Autoplay active: Playing related songs (Click to play queue in order)'
-                      }
-                    >
-                      <Repeat className="w-2.5 h-2.5" />
-                      <span>{repeatMode === 'ALL' ? 'Queue Mode' : 'Queue Mode Off'}</span>
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {queue.length > 1 && (
-                      <button
-                        onClick={shuffleQueue}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-[11px] font-semibold transition-all cursor-pointer active:scale-95"
-                        title="Shuffle upcoming tracks"
-                      >
-                        <Shuffle className="w-3 h-3" />
-                        <span>Shuffle</span>
-                      </button>
-                    )}
-                    {queue.length > 1 && (
-                      <button
-                        onClick={clearQueue}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/60 hover:text-accent-red text-[11px] font-semibold transition-all cursor-pointer active:scale-95"
-                        title="Clear all tracks except currently playing"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Clear</span>
-                      </button>
-                    )}
-                  </div>
+              {isLoadingRelated ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-white/50 gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-accent-red" />
+                  <span className="text-xs uppercase tracking-wider">Discovering related tracks...</span>
                 </div>
-
-                {/* Queue List */}
-                <div
-                  onScroll={handleListScroll}
-                  className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-1.5 py-1"
-                  data-scrollable
-                >
-                  {queue.map((item, idx) => {
-                    const isCurrent = idx === queueIndex;
-                    const isDragging = draggedIdx === idx;
-                    const isDragOver = dragOverIdx === idx && draggedIdx !== null && draggedIdx !== idx;
+              ) : relatedSongs.length > 0 ? (
+                <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-1.5 py-1" data-scrollable>
+                  {relatedSongs.map((song) => {
+                    const isAdded = addedFeedback[song.videoId];
                     return (
                       <div
-                        key={`${item.videoId}-${idx}`}
-                        data-np-queue-idx={idx}
-                        draggable={!isCurrent}
-                        onDragStart={(e) => {
-                          if (isCurrent) {
-                            e.preventDefault();
-                            return;
-                          }
-                          setDraggedIdx(idx);
-                          e.dataTransfer.effectAllowed = 'move';
-                          e.dataTransfer.setData('text/plain', String(idx));
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = 'move';
-                          if (dragOverIdx !== idx) {
-                            setDragOverIdx(idx);
-                          }
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (draggedIdx !== null && draggedIdx !== idx) {
-                            moveQueueItem(draggedIdx, idx);
-                          }
-                          setDraggedIdx(null);
-                          setDragOverIdx(null);
-                        }}
-                        onDragEnd={() => {
-                          setDraggedIdx(null);
-                          setDragOverIdx(null);
-                        }}
-                        className={`flex items-center justify-between p-2 rounded-2xl transition-all duration-150 group ${isDragging
-                          ? 'opacity-40 scale-[0.98] bg-white/10 border border-white/25'
-                          : isDragOver
-                            ? 'bg-white/[0.12] border border-accent-red/60 shadow-[0_0_14px_rgba(250,45,72,0.2)]'
-                            : isCurrent
-                              ? 'bg-white/[0.14] border border-white/25 text-white font-semibold shadow-lg'
-                              : 'hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] text-white/70'
-                          }`}
+                        key={song.videoId}
+                        className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition-all group"
                       >
                         <div
-                          onClick={() => playSong(item)}
+                          onClick={() => playSong(song)}
                           className="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer min-w-0"
                         >
-                          <div className="relative w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10">
-                            <img
-                              src={item.thumbnailUrl || (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : '/logo.svg')}
-                              alt={item.title}
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                e.currentTarget.src = '/logo.svg';
-                              }}
-                              className="w-full h-full object-cover"
-                            />
-                            {isCurrent && (
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                <div className="w-2 h-2 rounded-full bg-accent-red animate-ping" />
-                              </div>
-                            )}
-                          </div>
+                          <img
+                            src={song.thumbnailUrl || (song.videoId ? `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg` : '/logo.svg')}
+                            alt={song.title}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              e.currentTarget.src = '/logo.svg';
+                            }}
+                            className="w-11 h-11 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
+                          />
                           <div className="overflow-hidden flex-1 min-w-0">
-                            <p className="text-sm truncate leading-tight font-medium">
-                              {item.title}
+                            <p className="text-sm truncate leading-tight font-semibold text-white group-hover:text-accent-red transition-colors">
+                              {song.title}
                             </p>
                             <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden">
-                              {item.isExplicit && (
+                              {song.isExplicit && (
                                 <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-white/20 text-white/90 uppercase tracking-wider shrink-0">
                                   E
                                 </span>
                               )}
                               <p className="text-xs text-white/50 truncate">
-                                {item.artist}
+                                {song.artist}
                               </p>
-                              {item.durationText && (
+                              {song.albumName && (
+                                <>
+                                  <span className="text-white/30 text-[10px] shrink-0">•</span>
+                                  <span className="text-xs text-white/40 truncate">
+                                    {song.albumName}
+                                  </span>
+                                </>
+                              )}
+                              {song.durationText && (
                                 <>
                                   <span className="text-white/30 text-[10px] shrink-0">•</span>
                                   <span className="text-xs text-white/40 shrink-0 font-mono">
-                                    {item.durationText}
+                                    {song.durationText}
                                   </span>
                                 </>
                               )}
@@ -1393,655 +1527,516 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                           </div>
                         </div>
 
-                        {/* Drag Handle & Remove Controls */}
-                        <div className="flex items-center gap-1 shrink-0 ml-2">
-                          {isCurrent ? (
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-accent-red/25 text-accent-red border border-accent-red/40">
-                              Now
-                            </span>
-                          ) : (
-                            <>
-                              <div
-                                onTouchStart={() => setDraggedIdx(idx)}
-                                onTouchMove={(e) => {
-                                  const touch = e.touches[0];
-                                  if (!touch) return;
-                                  const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                                  const row = el?.closest('[data-np-queue-idx]');
-                                  const targetIdx = row ? parseInt(row.getAttribute('data-np-queue-idx') || '', 10) : NaN;
-                                  if (!isNaN(targetIdx)) {
-                                    setDragOverIdx(targetIdx);
-                                  }
-                                }}
-                                onTouchEnd={() => {
-                                  if (draggedIdx !== null && dragOverIdx !== null && draggedIdx !== dragOverIdx) {
-                                    moveQueueItem(draggedIdx, dragOverIdx);
-                                  }
-                                  setDraggedIdx(null);
-                                  setDragOverIdx(null);
-                                }}
-                                className="p-1.5 rounded-lg text-white/35 hover:text-white/80 hover:bg-white/10 cursor-grab active:cursor-grabbing touch-none transition-colors"
-                                title="Drag to reorder"
-                                aria-label="Drag to reorder"
-                              >
-                                <GripVertical className="w-4 h-4" />
-                              </div>
-                              <button
-                                onClick={() => removeFromQueue(idx)}
-                                className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-accent-red transition-all cursor-pointer"
-                                title="Remove from queue"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <button
+                            onClick={() => playSong(song)}
+                            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 active:scale-90 flex items-center justify-center transition-all cursor-pointer text-white"
+                            title="Play track"
+                          >
+                            <Play className="w-4 h-4 fill-white text-white ml-0.5" />
+                          </button>
+                          <button
+                            onClick={() => handleAddRelatedToQueue(song)}
+                            className={`w-9 h-9 rounded-full transition-all cursor-pointer active:scale-90 flex items-center justify-center ${isAdded
+                              ? 'bg-green-500/25 text-green-400 border border-green-500/40'
+                              : 'bg-white/10 hover:bg-white/25 border border-white/10 text-white/80 hover:text-white'
+                              }`}
+                            title={isAdded ? 'Added to queue' : 'Add to queue'}
+                          >
+                            {isAdded ? (
+                              <Check className="w-4 h-4 stroke-[3]" />
+                            ) : (
+                              <Plus className="w-4 h-4 stroke-[2.5]" />
+                            )}
+                          </button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            )}
-
-            {/* SUB-TAB 2: Related Music Chart */}
-            {queueSubTab === 'RELATED' && (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex items-center justify-between px-1 py-1.5 text-xs text-white/60">
-                  <div className="flex items-center gap-2 overflow-hidden mr-2">
-                    <span className="text-[11px] font-medium truncate">
-                      Based on <strong className="text-white">{currentSong.title}</strong>
-                    </span>
-                    <button
-                      onClick={handleRefreshRelated}
-                      disabled={isLoadingRelated}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 hover:bg-white/20 text-white/70 hover:text-white border border-white/10 transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
-                      title="Refresh related songs"
-                    >
-                      <RotateCw className={`w-2.5 h-2.5 ${isLoadingRelated ? 'animate-spin' : ''}`} />
-                      <span>Refresh</span>
-                    </button>
-                  </div>
-                  {relatedSongs.length > 0 && (
-                    <button
-                      onClick={handleAddAllRelated}
-                      className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer active:scale-95 shrink-0 ${addedAllFeedback
-                        ? 'bg-green-500/25 text-green-300 border border-green-500/40'
-                        : 'bg-accent-red/20 text-accent-red hover:bg-accent-red hover:text-white border border-accent-red/30'
-                        }`}
-                    >
-                      {addedAllFeedback ? 'Added to Queue' : 'Add All to Queue'}
-                    </button>
-                  )}
-                </div>
-
-                {isLoadingRelated ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-white/50 gap-2">
-                    <Loader2 className="w-6 h-6 animate-spin text-accent-red" />
-                    <span className="text-xs uppercase tracking-wider">Discovering related tracks...</span>
-                  </div>
-                ) : relatedSongs.length > 0 ? (
-                  <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-1.5 py-1" data-scrollable>
-                    {relatedSongs.map((song) => {
-                      const isAdded = addedFeedback[song.videoId];
-                      return (
-                        <div
-                          key={song.videoId}
-                          className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition-all group"
-                        >
-                          <div
-                            onClick={() => playSong(song)}
-                            className="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer min-w-0"
-                          >
-                            <img
-                              src={song.thumbnailUrl || (song.videoId ? `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg` : '/logo.svg')}
-                              alt={song.title}
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                e.currentTarget.src = '/logo.svg';
-                              }}
-                              className="w-11 h-11 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
-                            />
-                            <div className="overflow-hidden flex-1 min-w-0">
-                              <p className="text-sm truncate leading-tight font-semibold text-white group-hover:text-accent-red transition-colors">
-                                {song.title}
-                              </p>
-                              <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden">
-                                {song.isExplicit && (
-                                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-white/20 text-white/90 uppercase tracking-wider shrink-0">
-                                    E
-                                  </span>
-                                )}
-                                <p className="text-xs text-white/50 truncate">
-                                  {song.artist}
-                                </p>
-                                {song.albumName && (
-                                  <>
-                                    <span className="text-white/30 text-[10px] shrink-0">•</span>
-                                    <span className="text-xs text-white/40 truncate">
-                                      {song.albumName}
-                                    </span>
-                                  </>
-                                )}
-                                {song.durationText && (
-                                  <>
-                                    <span className="text-white/30 text-[10px] shrink-0">•</span>
-                                    <span className="text-xs text-white/40 shrink-0 font-mono">
-                                      {song.durationText}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            <button
-                              onClick={() => playSong(song)}
-                              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 active:scale-90 flex items-center justify-center transition-all cursor-pointer text-white"
-                              title="Play track"
-                            >
-                              <Play className="w-4 h-4 fill-white text-white ml-0.5" />
-                            </button>
-                            <button
-                              onClick={() => handleAddRelatedToQueue(song)}
-                              className={`w-9 h-9 rounded-full transition-all cursor-pointer active:scale-90 flex items-center justify-center ${isAdded
-                                ? 'bg-green-500/25 text-green-400 border border-green-500/40'
-                                : 'bg-white/10 hover:bg-white/25 border border-white/10 text-white/80 hover:text-white'
-                                }`}
-                              title={isAdded ? 'Added to queue' : 'Add to queue'}
-                            >
-                              {isAdded ? (
-                                <Check className="w-4 h-4 stroke-[3]" />
-                              ) : (
-                                <Plus className="w-4 h-4 stroke-[2.5]" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-white/40 text-xs gap-2">
-                    <Radio className="w-8 h-8 opacity-30" />
-                    <span>No related tracks available at this time.</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Collapsible bottom controls: hides extra volume/bottom buttons when scrolling Lyrics or Queue on mobile */}
-        <div
-          className={`transition-all duration-300 ease-out overflow-hidden ${!isDocked && nowPlayingTab !== 'PLAYER' && isListScrolled
-            ? 'max-h-0 opacity-0 pointer-events-none'
-            : 'max-h-[420px] opacity-100'
-            }`}
-        >
-          {/* 4. Scrubber Bar with Played & Remaining Time — Apple Music style with glowing thumb knob */}
-          <div className="w-full pt-2 pb-2 select-none">
-            {/* Expanded touch target wrapper */}
-            <div
-              ref={scrubberBarRef}
-              onPointerDown={handleSeekPointerDown}
-              className="w-full py-2.5 -my-2 cursor-pointer relative group flex items-center"
-            >
-              {/* The background track bar */}
-              <div className="w-full h-2 rounded-full bg-white/25 group-hover:bg-white/30 relative">
-                {/* Filled completed section (solid pure white) */}
-                <div
-                  className="h-full rounded-full bg-white relative transition-[width] duration-75 ease-out"
-                  style={{
-                    width: `${Math.min(100, Math.max(0, progressPercent))}%`,
-                  }}
-                >
-                  {/* Circular White Thumb Knob with Radiant Ambient Glow */}
-                  <div
-                    className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.95),0_0_4px_rgba(255,255,255,0.8)] transition-transform duration-100 group-hover:scale-110 group-active:scale-125 pointer-events-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Time row: 0:29 on left, -3:18 on right */}
-            <div className="flex justify-between items-center text-[11px] sm:text-xs font-medium text-white/60 mt-1 px-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <span>{formatTime(displayCurrentTime)}</span>
-              <span>{formatRemainingTime(duration - displayCurrentTime)}</span>
-            </div>
-          </div>
-
-          {/* 5. Main Playback Transport Controls — Modern double-triangle rewind & fast-forward glyphs matching reference */}
-          <div className="flex items-center justify-center w-full py-2.5 sm:py-3 gap-12 sm:gap-16">
-            {/* Previous Track — Double Triangle Pointing Left (Rewind ◀◀) */}
-            <button
-              onClick={prev}
-              className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
-              title="Previous track"
-            >
-              <svg
-                viewBox="0 0 28 28"
-                className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
-                aria-hidden="true"
-              >
-                {/* Left Triangle */}
-                <path d="M13 6.2a1.2 1.2 0 0 0-1.85-1.01L2.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
-                {/* Right Triangle */}
-                <path d="M25 6.2a1.2 1.2 0 0 0-1.85-1.01L14.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
-              </svg>
-            </button>
-
-            {/* Play / Pause — Large Bold White Glyph with Smooth Rounded Bars / Triangle */}
-            <button
-              onClick={togglePlay}
-              className="text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? (
-                <svg
-                  viewBox="0 0 28 28"
-                  className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] shrink-0"
-                  aria-hidden="true"
-                >
-                  {/* Two smooth vertical rounded pill bars */}
-                  <rect x="7" y="4" width="4.5" height="20" rx="2.25" />
-                  <rect x="16.5" y="4" width="4.5" height="20" rx="2.25" />
-                </svg>
               ) : (
-                <svg
-                  viewBox="0 0 28 28"
-                  className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] ml-1 shrink-0"
-                  aria-hidden="true"
-                >
-                  {/* Solid rounded play triangle */}
-                  <path d="M7 4.5a1.6 1.6 0 0 1 2.45-1.36l13.5 8.14a1.6 1.6 0 0 1 0 2.72l-13.5 8.14A1.6 1.6 0 0 1 7 20.78V4.5z" />
-                </svg>
+                <div className="flex-1 flex flex-col items-center justify-center text-white/40 text-xs gap-2">
+                  <Radio className="w-8 h-8 opacity-30" />
+                  <span>No related tracks available at this time.</span>
+                </div>
               )}
-            </button>
+            </div>
+          )}
+        </div>
+      )}
 
-            {/* Next Track — Double Triangle Pointing Right (Fast Forward ▶▶) */}
-            <button
-              onClick={next}
-              className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
-              title="Next track"
-            >
-              <svg
-                viewBox="0 0 28 28"
-                className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
-                aria-hidden="true"
-              >
-                {/* Left Triangle */}
-                <path d="M3 6.2a1.2 1.2 0 0 1 1.85-1.01L13.8 13a1.2 1.2 0 0 1 0 2.02L4.85 22.81A1.2 1.2 0 0 1 3 21.8V6.2z" />
-                {/* Right Triangle */}
-                <path d="M15 6.2a1.2 1.2 0 0 1 1.85-1.01L25.8 13a1.2 1.2 0 0 1 0 2.02L16.85 22.81A1.2 1.2 0 0 1 15 21.8V6.2z" />
-              </svg>
-            </button>
-          </div>
-
-          {/* 6. Volume Slider Row */}
-          <div className="w-full flex items-center gap-3 px-1 py-2">
-            <button
-              onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
-              className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
-              title="Mute / Unmute"
-            >
-              {volume === 0 ? <VolumeX className="w-4.5 h-4.5" /> : <Volume1 className="w-4.5 h-4.5" />}
-            </button>
-
-            <div className="flex-1 relative flex items-center">
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={volume}
-                onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-white/20 accent-white transition-all [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+      {/* Collapsible bottom controls: hides extra volume/bottom buttons when scrolling Lyrics or Queue on mobile */}
+      <div
+        className={`transition-all duration-300 ease-out overflow-hidden ${!isDocked && nowPlayingTab !== 'PLAYER' && isListScrolled
+          ? 'max-h-0 opacity-0 pointer-events-none'
+          : 'max-h-[420px] opacity-100'
+          }`}
+      >
+        {/* 4. Scrubber Bar with Played & Remaining Time — Apple Music style with glowing thumb knob */}
+        <div className="w-full pt-2 pb-2 select-none">
+          {/* Expanded touch target wrapper */}
+          <div
+            ref={scrubberBarRef}
+            onPointerDown={handleSeekPointerDown}
+            className="w-full py-2.5 -my-2 cursor-pointer relative group flex items-center"
+          >
+            {/* The background track bar */}
+            <div className="w-full h-2 rounded-full bg-white/25 group-hover:bg-white/30 relative">
+              {/* Filled completed section (solid pure white) */}
+              <div
+                className="h-full rounded-full bg-white relative transition-[width] duration-75 ease-out"
                 style={{
-                  background: `linear-gradient(to right, #ffffff ${volume * 100}%, rgba(255,255,255,0.2) ${volume * 100}%)`,
+                  width: `${Math.min(100, Math.max(0, progressPercent))}%`,
                 }}
-                title="Volume"
-              />
+              >
+                {/* Circular White Thumb Knob with Radiant Ambient Glow */}
+                <div
+                  className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.95),0_0_4px_rgba(255,255,255,0.8)] transition-transform duration-100 group-hover:scale-110 group-active:scale-125 pointer-events-none"
+                />
+              </div>
             </div>
-
-            <button
-              onClick={() => setVolume(1)}
-              className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
-              title="Max Volume"
-            >
-              <Volume2 className="w-4.5 h-4.5" />
-            </button>
           </div>
 
-          {/* 7. Bottom 4 Action Buttons — Liquid Glass iOS 26 (Apple Music reference) */}
-          <div className="flex items-center justify-between w-full px-4 pt-2.5 pb-1.5">
-            {/* Button 1: Lyrics Toggle — Speech bubble icon */}
-            <button
-              onClick={() => setNowPlayingTab(nowPlayingTab === 'LYRICS' ? 'PLAYER' : 'LYRICS')}
-              className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'LYRICS'
-                ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
-                : 'text-white/70'
-                }`}
-              title="Synchronized Lyrics"
-            >
-              {/* Apple Music speech-bubble lyrics icon */}
-              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                <path d="M8 9h8" />
-                <path d="M8 13h4" />
-              </svg>
-            </button>
-
-            {/* Button 2: Infinity / Repeat Mode Pill — wider pill shape */}
-            <div className="relative flex items-center justify-center">
-              <button
-                onClick={handleCyclePlaybackMode}
-                className={`liquid-glass-btn-pill w-16 h-10 sm:w-[72px] sm:h-11 ${autoplay || repeatMode !== 'OFF'
-                  ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
-                  : 'text-white/50'
-                  }`}
-                title={
-                  autoplay
-                    ? 'Default: Playing Related Autoplay (Click for Queue Mode)'
-                    : repeatMode === 'ALL'
-                      ? 'Queue Mode: Playing Queue Songs (Click to repeat track)'
-                      : repeatMode === 'ONE'
-                        ? 'Loop: Repeat One Track (Click to turn off)'
-                        : 'Playback: Normal (Click for Autoplay)'
-                }
-              >
-                {autoplay ? (
-                  <Infinity className="w-6 h-6 stroke-[2.2]" />
-                ) : repeatMode === 'ALL' ? (
-                  <Repeat className="w-5 h-5 stroke-[2.2]" />
-                ) : repeatMode === 'ONE' ? (
-                  <Repeat1 className="w-5 h-5 stroke-[2.2]" />
-                ) : (
-                  <Infinity className="w-6 h-6 stroke-[2.2] opacity-50" />
-                )}
-              </button>
-
-              {/* Quick Feedback Toast for Playback Mode */}
-              {playbackModeFeedback && (
-                <div className="absolute -top-10 px-3 py-1 rounded-full bg-black/85 backdrop-blur-xl border border-white/20 text-white text-[11px] font-semibold whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 shadow-xl pointer-events-none">
-                  {playbackModeFeedback}
-                </div>
-              )}
-            </div>
-
-            {/* Button 3: Download — Arrow down to line icon */}
-            <button
-              onClick={handleDirectDownload}
-              disabled={isDownloading}
-              className={`liquid-glass-btn-icon w-12 h-12 ${downloadStatus === 'SUCCESS' || isDownloaded
-                ? '!bg-white/30 !border-white/40 !text-white'
-                : isDownloading
-                  ? 'text-white'
-                  : 'text-white/70'
-                }`}
-              title={
-                isDownloading
-                  ? 'Downloading high-quality audio file...'
-                  : downloadStatus === 'SUCCESS'
-                    ? 'Downloaded!'
-                    : isDownloaded
-                      ? 'Re-download direct file (320kbps)'
-                      : 'Direct file download (320kbps high quality)'
-              }
-            >
-              {isDownloading ? (
-                <Loader2 className="w-[22px] h-[22px] animate-spin stroke-[2]" />
-              ) : downloadStatus === 'SUCCESS' || isDownloaded ? (
-                <Check className="w-[22px] h-[22px] stroke-[2.5]" />
-              ) : (
-                /* Apple Music download arrow icon */
-                <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3v12" />
-                  <path d="M8 12l4 4 4-4" />
-                  <path d="M4 20h16" />
-                </svg>
-              )}
-            </button>
-
-            {/* Button 4: Queue / Up Next — List with music note icon */}
-            <button
-              onClick={() => setNowPlayingTab(nowPlayingTab === 'QUEUE' ? 'PLAYER' : 'QUEUE')}
-              className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'QUEUE'
-                ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
-                : 'text-white/70'
-                }`}
-              title="Up Next Queue"
-            >
-              {/* Apple Music queue/playlist icon */}
-              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h14" />
-                <path d="M3 12h14" />
-                <path d="M3 18h10" />
-                <path d="M19 15v6" />
-                <path d="M22 18h-6" />
-              </svg>
-            </button>
+          {/* Time row: 0:29 on left, -3:18 on right */}
+          <div className="flex justify-between items-center text-[11px] sm:text-xs font-medium text-white/60 mt-1 px-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <span>{formatTime(displayCurrentTime)}</span>
+            <span>{formatRemainingTime(duration - displayCurrentTime)}</span>
           </div>
         </div>
-      </div>
 
-      {/* Floating More Options Sheet (triggered by •••) */}
-      {showOptionsMenu && (
-        <div
-          onClick={() => setShowOptionsMenu(false)}
-          className="absolute inset-0 z-50 bg-black/45 backdrop-blur-2xl flex flex-col justify-end p-3.5 sm:p-4 animate-in fade-in duration-200"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm mx-auto rounded-3xl p-4 flex flex-col gap-2 bg-white/[0.08] backdrop-blur-3xl border border-white/20 shadow-[0_24px_80px_rgba(0,0,0,0.6)] max-h-[88vh] overflow-y-auto scrollbar-none"
+        {/* 5. Main Playback Transport Controls — Modern double-triangle rewind & fast-forward glyphs matching reference */}
+        <div className="flex items-center justify-center w-full py-2.5 sm:py-3 gap-12 sm:gap-16">
+          {/* Previous Track — Double Triangle Pointing Left (Rewind ◀◀) */}
+          <button
+            onClick={prev}
+            className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
+            title="Previous track"
           >
-            {/* Subtle Sheet Handle */}
-            <div className="w-9 h-1 rounded-full bg-white/25 mx-auto mb-1 shrink-0" />
+            <svg
+              viewBox="0 0 28 28"
+              className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
+              aria-hidden="true"
+            >
+              {/* Left Triangle */}
+              <path d="M13 6.2a1.2 1.2 0 0 0-1.85-1.01L2.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
+              {/* Right Triangle */}
+              <path d="M25 6.2a1.2 1.2 0 0 0-1.85-1.01L14.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
+            </svg>
+          </button>
 
-            {/* Track Header */}
-            <div className="flex items-center gap-3 px-2 py-2 pb-3 border-b border-white/10">
-              <img
-                src={artworkUrl}
-                alt={currentSong.title}
-                referrerPolicy="no-referrer"
-                onError={handleArtworkError}
-                className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-md shrink-0"
-              />
-              <div className="overflow-hidden flex-1 min-w-0">
-                <h4 className="text-sm font-bold text-white truncate">{currentSong.title}</h4>
-                <p className="text-xs text-white/55 truncate mt-0.5">{currentSong.artist}</p>
+          {/* Play / Pause — Large Bold White Glyph with Smooth Rounded Bars / Triangle */}
+          <button
+            onClick={togglePlay}
+            className="text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? (
+              <svg
+                viewBox="0 0 28 28"
+                className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] shrink-0"
+                aria-hidden="true"
+              >
+                {/* Two smooth vertical rounded pill bars */}
+                <rect x="7" y="4" width="4.5" height="20" rx="2.25" />
+                <rect x="16.5" y="4" width="4.5" height="20" rx="2.25" />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 28 28"
+                className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] ml-1 shrink-0"
+                aria-hidden="true"
+              >
+                {/* Solid rounded play triangle */}
+                <path d="M7 4.5a1.6 1.6 0 0 1 2.45-1.36l13.5 8.14a1.6 1.6 0 0 1 0 2.72l-13.5 8.14A1.6 1.6 0 0 1 7 20.78V4.5z" />
+              </svg>
+            )}
+          </button>
+
+          {/* Next Track — Double Triangle Pointing Right (Fast Forward ▶▶) */}
+          <button
+            onClick={next}
+            className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
+            title="Next track"
+          >
+            <svg
+              viewBox="0 0 28 28"
+              className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
+              aria-hidden="true"
+            >
+              {/* Left Triangle */}
+              <path d="M3 6.2a1.2 1.2 0 0 1 1.85-1.01L13.8 13a1.2 1.2 0 0 1 0 2.02L4.85 22.81A1.2 1.2 0 0 1 3 21.8V6.2z" />
+              {/* Right Triangle */}
+              <path d="M15 6.2a1.2 1.2 0 0 1 1.85-1.01L25.8 13a1.2 1.2 0 0 1 0 2.02L16.85 22.81A1.2 1.2 0 0 1 15 21.8V6.2z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 6. Volume Slider Row */}
+        <div className="w-full flex items-center gap-3 px-1 py-2">
+          <button
+            onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
+            className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
+            title="Mute / Unmute"
+          >
+            {volume === 0 ? <VolumeX className="w-4.5 h-4.5" /> : <Volume1 className="w-4.5 h-4.5" />}
+          </button>
+
+          <div className="flex-1 relative flex items-center">
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-white/20 accent-white transition-all [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+              style={{
+                background: `linear-gradient(to right, #ffffff ${volume * 100}%, rgba(255,255,255,0.2) ${volume * 100}%)`,
+              }}
+              title="Volume"
+            />
+          </div>
+
+          <button
+            onClick={() => setVolume(1)}
+            className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
+            title="Max Volume"
+          >
+            <Volume2 className="w-4.5 h-4.5" />
+          </button>
+        </div>
+
+        {/* 7. Bottom 4 Action Buttons — Liquid Glass iOS 26 (Apple Music reference) */}
+        <div className="flex items-center justify-between w-full px-4 pt-2.5 pb-1.5">
+          {/* Button 1: Lyrics Toggle — Speech bubble icon */}
+          <button
+            onClick={() => setNowPlayingTab(nowPlayingTab === 'LYRICS' ? 'PLAYER' : 'LYRICS')}
+            className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'LYRICS'
+              ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
+              : 'text-white/70'
+              }`}
+            title="Synchronized Lyrics"
+          >
+            {/* Apple Music speech-bubble lyrics icon */}
+            <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <path d="M8 9h8" />
+              <path d="M8 13h4" />
+            </svg>
+          </button>
+
+          {/* Button 2: Infinity / Repeat Mode Pill — wider pill shape */}
+          <div className="relative flex items-center justify-center">
+            <button
+              onClick={handleCyclePlaybackMode}
+              className={`liquid-glass-btn-pill w-16 h-10 sm:w-[72px] sm:h-11 ${autoplay || repeatMode !== 'OFF'
+                ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
+                : 'text-white/50'
+                }`}
+              title={
+                autoplay
+                  ? 'Default: Playing Related Autoplay (Click for Queue Mode)'
+                  : repeatMode === 'ALL'
+                    ? 'Queue Mode: Playing Queue Songs (Click to repeat track)'
+                    : repeatMode === 'ONE'
+                      ? 'Loop: Repeat One Track (Click to turn off)'
+                      : 'Playback: Normal (Click for Autoplay)'
+              }
+            >
+              {autoplay ? (
+                <Infinity className="w-6 h-6 stroke-[2.2]" />
+              ) : repeatMode === 'ALL' ? (
+                <Repeat className="w-5 h-5 stroke-[2.2]" />
+              ) : repeatMode === 'ONE' ? (
+                <Repeat1 className="w-5 h-5 stroke-[2.2]" />
+              ) : (
+                <Infinity className="w-6 h-6 stroke-[2.2] opacity-50" />
+              )}
+            </button>
+
+            {/* Quick Feedback Toast for Playback Mode */}
+            {playbackModeFeedback && (
+              <div className="absolute -top-10 px-3 py-1 rounded-full bg-black/85 backdrop-blur-xl border border-white/20 text-white text-[11px] font-semibold whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 shadow-xl pointer-events-none">
+                {playbackModeFeedback}
               </div>
+            )}
+          </div>
+
+          {/* Button 3: Download — Arrow down to line icon */}
+          <button
+            onClick={handleDirectDownload}
+            disabled={isDownloading}
+            className={`liquid-glass-btn-icon w-12 h-12 ${downloadStatus === 'SUCCESS' || isDownloaded
+              ? '!bg-white/30 !border-white/40 !text-white'
+              : isDownloading
+                ? 'text-white'
+                : 'text-white/70'
+              }`}
+            title={
+              isDownloading
+                ? 'Downloading high-quality audio file...'
+                : downloadStatus === 'SUCCESS'
+                  ? 'Downloaded!'
+                  : isDownloaded
+                    ? 'Re-download direct file (320kbps)'
+                    : 'Direct file download (320kbps high quality)'
+            }
+          >
+            {isDownloading ? (
+              <Loader2 className="w-[22px] h-[22px] animate-spin stroke-[2]" />
+            ) : downloadStatus === 'SUCCESS' || isDownloaded ? (
+              <Check className="w-[22px] h-[22px] stroke-[2.5]" />
+            ) : (
+              /* Apple Music download arrow icon */
+              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v12" />
+                <path d="M8 12l4 4 4-4" />
+                <path d="M4 20h16" />
+              </svg>
+            )}
+          </button>
+
+          {/* Button 4: Queue / Up Next — List with music note icon */}
+          <button
+            onClick={() => setNowPlayingTab(nowPlayingTab === 'QUEUE' ? 'PLAYER' : 'QUEUE')}
+            className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'QUEUE'
+              ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
+              : 'text-white/70'
+              }`}
+            title="Up Next Queue"
+          >
+            {/* Apple Music queue/playlist icon */}
+            <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h14" />
+              <path d="M3 12h14" />
+              <path d="M3 18h10" />
+              <path d="M19 15v6" />
+              <path d="M22 18h-6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+      {/* Floating More Options Sheet (triggered by •••) */ }
+  {
+    showOptionsMenu && (
+      <div
+        onClick={() => setShowOptionsMenu(false)}
+        className="absolute inset-0 z-50 bg-black/45 backdrop-blur-2xl flex flex-col justify-end p-3.5 sm:p-4 animate-in fade-in duration-200"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-sm mx-auto rounded-3xl p-4 flex flex-col gap-2 bg-white/[0.08] backdrop-blur-3xl border border-white/20 shadow-[0_24px_80px_rgba(0,0,0,0.6)] max-h-[88vh] overflow-y-auto scrollbar-none"
+        >
+          {/* Subtle Sheet Handle */}
+          <div className="w-9 h-1 rounded-full bg-white/25 mx-auto mb-1 shrink-0" />
+
+          {/* Track Header */}
+          <div className="flex items-center gap-3 px-2 py-2 pb-3 border-b border-white/10">
+            <img
+              src={artworkUrl}
+              alt={currentSong.title}
+              referrerPolicy="no-referrer"
+              onError={handleArtworkError}
+              className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-md shrink-0"
+            />
+            <div className="overflow-hidden flex-1 min-w-0">
+              <h4 className="text-sm font-bold text-white truncate">{currentSong.title}</h4>
+              <p className="text-xs text-white/55 truncate mt-0.5">{currentSong.artist}</p>
             </div>
+          </div>
 
-            {/* Dynamic Audio Quality Selector */}
-            <div className="p-3 rounded-2xl bg-white/[0.05] border border-white/10 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-white/85 px-0.5">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-accent-red" />
-                  <span>Audio Streaming Quality</span>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white/90 border border-white/10">
-                  {audioQuality === 'LOSSLESS' ? '320k AAC' : audioQuality === 'HIGH' ? '256k AAC' : '128k'}
-                </span>
+          {/* Dynamic Audio Quality Selector */}
+          <div className="p-3 rounded-2xl bg-white/[0.05] border border-white/10 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-white/85 px-0.5">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-accent-red" />
+                <span>Audio Streaming Quality</span>
               </div>
-              <div className="grid grid-cols-3 gap-1.5 bg-black/20 p-1 rounded-xl border border-white/[0.06]">
-                {[
-                  { id: 'LOSSLESS' as const, label: 'Lossless', sub: '320 kbps' },
-                  { id: 'HIGH' as const, label: 'High', sub: '256 kbps' },
-                  { id: 'LOW' as const, label: 'Normal', sub: '128 kbps' },
-                ].map((q) => {
-                  const isActive = audioQuality === q.id;
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => setAudioQuality(q.id)}
-                      className={`py-1.5 px-1.5 rounded-lg text-center transition-all cursor-pointer border ${isActive
-                        ? 'bg-accent-red/25 text-white border-accent-red/50 shadow-sm font-bold'
-                        : 'bg-transparent text-white/55 hover:text-white hover:bg-white/[0.06] border-transparent text-xs font-medium'
-                        }`}
-                    >
-                      <div className="text-xs leading-tight">{q.label}</div>
-                      <div className={`text-[10px] mt-0.5 ${isActive ? 'text-white/80' : 'text-white/40'}`}>
-                        {q.sub}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white/90 border border-white/10">
+                {audioQuality === 'LOSSLESS' ? '320k AAC' : audioQuality === 'HIGH' ? '256k AAC' : '128k'}
+              </span>
             </div>
-
-            {/* Action Menu Items */}
-            <div className="flex flex-col gap-1">
-              {currentSong.albumId && onOpenDetail && (
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    onOpenDetail(currentSong.albumId!, undefined, currentSong.albumName || 'Album');
-                  }}
-                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
-                      <Disc3 className="w-4 h-4 text-accent-red" />
+            <div className="grid grid-cols-3 gap-1.5 bg-black/20 p-1 rounded-xl border border-white/[0.06]">
+              {[
+                { id: 'LOSSLESS' as const, label: 'Lossless', sub: '320 kbps' },
+                { id: 'HIGH' as const, label: 'High', sub: '256 kbps' },
+                { id: 'LOW' as const, label: 'Normal', sub: '128 kbps' },
+              ].map((q) => {
+                const isActive = audioQuality === q.id;
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => setAudioQuality(q.id)}
+                    className={`py-1.5 px-1.5 rounded-lg text-center transition-all cursor-pointer border ${isActive
+                      ? 'bg-accent-red/25 text-white border-accent-red/50 shadow-sm font-bold'
+                      : 'bg-transparent text-white/55 hover:text-white hover:bg-white/[0.06] border-transparent text-xs font-medium'
+                      }`}
+                  >
+                    <div className="text-xs leading-tight">{q.label}</div>
+                    <div className={`text-[10px] mt-0.5 ${isActive ? 'text-white/80' : 'text-white/40'}`}>
+                      {q.sub}
                     </div>
-                    <span className="truncate">View Album ({currentSong.albumName || 'Album'})</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
-                </button>
-              )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-              {currentSong.artistId && onOpenDetail && (
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    onOpenDetail(currentSong.artistId!, undefined, currentSong.artist, undefined, null, 'ARTIST');
-                  }}
-                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
-                      <Music2 className="w-4 h-4 text-accent-red" />
-                    </div>
-                    <span className="truncate">View Artist ({currentSong.artist})</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
-                </button>
-              )}
-
-              {onOpenSleepTimer && (
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    onOpenSleepTimer();
-                  }}
-                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
-                      <Moon className="w-4 h-4 text-accent-red" />
-                    </div>
-                    <span>Sleep Timer</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
-                        {sleepTimerEndOfTrack ? 'End of track' : `${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`}
-                      </span>
-                    )}
-                    <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70" />
-                  </div>
-                </button>
-              )}
-
-              {onOpenEqualizer && (
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    onOpenEqualizer();
-                  }}
-                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
-                      <Sliders className="w-4 h-4 text-accent-red" />
-                    </div>
-                    <span>Equalizer & 2D Tone Pad</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
-                </button>
-              )}
-
-              {onOpenListenTogether && (
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    onOpenListenTogether();
-                  }}
-                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
-                      <Users className="w-4 h-4 text-accent-red" />
-                    </div>
-                    <span>Listen Together (Jam Party)</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
-                </button>
-              )}
-
-              {onOpenSettings && (
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    onOpenSettings();
-                  }}
-                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
-                      <Settings className="w-4 h-4 text-accent-red" />
-                    </div>
-                    <span>Settings & Preferences</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
-                </button>
-              )}
-
+          {/* Action Menu Items */}
+          <div className="flex flex-col gap-1">
+            {currentSong.albumId && onOpenDetail && (
               <button
                 onClick={() => {
                   setShowOptionsMenu(false);
-                  const shareUrl = `https://music.youtube.com/watch?v=${currentSong.videoId}`;
-                  if (navigator.share) {
-                    navigator.share({
-                      title: currentSong.title,
-                      text: `Listening to ${currentSong.title} by ${currentSong.artist} on Znode Music`,
-                      url: shareUrl,
-                    }).catch(() => { });
-                  } else if (navigator.clipboard) {
-                    navigator.clipboard.writeText(shareUrl).catch(() => { });
-                  }
+                  onOpenDetail(currentSong.albumId!, undefined, currentSong.albumName || 'Album');
+                }}
+                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                    <Disc3 className="w-4 h-4 text-accent-red" />
+                  </div>
+                  <span className="truncate">View Album ({currentSong.albumName || 'Album'})</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+              </button>
+            )}
+
+            {currentSong.artistId && onOpenDetail && (
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  onOpenDetail(currentSong.artistId!, undefined, currentSong.artist, undefined, null, 'ARTIST');
+                }}
+                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                    <Music2 className="w-4 h-4 text-accent-red" />
+                  </div>
+                  <span className="truncate">View Artist ({currentSong.artist})</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+              </button>
+            )}
+
+            {onOpenSleepTimer && (
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  onOpenSleepTimer();
                 }}
                 className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
-                    <Share2 className="w-4 h-4 text-accent-red" />
+                    <Moon className="w-4 h-4 text-accent-red" />
                   </div>
-                  <span>Share Song</span>
+                  <span>Sleep Timer</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
+                      {sleepTimerEndOfTrack ? 'End of track' : `${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`}
+                    </span>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70" />
+                </div>
+              </button>
+            )}
+
+            {onOpenEqualizer && (
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  onOpenEqualizer();
+                }}
+                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                    <Sliders className="w-4 h-4 text-accent-red" />
+                  </div>
+                  <span>Equalizer & 2D Tone Pad</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
               </button>
-            </div>
+            )}
+
+            {onOpenListenTogether && (
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  onOpenListenTogether();
+                }}
+                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                    <Users className="w-4 h-4 text-accent-red" />
+                  </div>
+                  <span>Listen Together (Jam Party)</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+              </button>
+            )}
+
+            {onOpenSettings && (
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  onOpenSettings();
+                }}
+                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                    <Settings className="w-4 h-4 text-accent-red" />
+                  </div>
+                  <span>Settings & Preferences</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+              </button>
+            )}
 
             <button
-              onClick={() => setShowOptionsMenu(false)}
-              className="w-full py-2.5 mt-1 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-xs transition-colors cursor-pointer"
+              onClick={() => {
+                setShowOptionsMenu(false);
+                const shareUrl = `https://music.youtube.com/watch?v=${currentSong.videoId}`;
+                if (navigator.share) {
+                  navigator.share({
+                    title: currentSong.title,
+                    text: `Listening to ${currentSong.title} by ${currentSong.artist} on Znode Music`,
+                    url: shareUrl,
+                  }).catch(() => { });
+                } else if (navigator.clipboard) {
+                  navigator.clipboard.writeText(shareUrl).catch(() => { });
+                }
+              }}
+              className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
             >
-              Close
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                  <Share2 className="w-4 h-4 text-accent-red" />
+                </div>
+                <span>Share Song</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
             </button>
           </div>
+
+          <button
+            onClick={() => setShowOptionsMenu(false)}
+            className="w-full py-2.5 mt-1 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-xs transition-colors cursor-pointer"
+          >
+            Close
+          </button>
         </div>
-      )}
-    </div>
+      </div>
+    )
+  }
+    </div >
   );
 };
