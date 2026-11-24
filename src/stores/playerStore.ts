@@ -227,7 +227,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     if (repeatMode === 'ONE') {
       seek(0);
       audioEngine.resume();
-    } else {
+    } else if (!audioEngine.wasCrossfaded) {
+      next();
+    }
+  });
+
+  audioEngine.onCrossfade(() => {
+    const { repeatMode, next, sleepTimerEndOfTrack, cancelSleepTimer } = get();
+    if (sleepTimerEndOfTrack) {
+      cancelSleepTimer();
+      audioEngine.pause();
+      return;
+    }
+    if (repeatMode !== 'ONE') {
       next();
     }
   });

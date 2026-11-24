@@ -172,7 +172,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
             e.stopPropagation();
             togglePlay();
           }}
-          className="w-9 h-9 rounded-full liquid-glass-circle flex items-center justify-center text-white border border-white/30 shadow-md active:scale-90 hover:scale-105 transition-all shrink-0 cursor-pointer ml-auto"
+          className="w-9 h-9 rounded-full liquid-glass-circle flex items-center justify-center text-white active:scale-90 hover:scale-105 transition-all shrink-0 cursor-pointer ml-auto"
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
@@ -195,9 +195,8 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
       style={{
         transform: `translateX(${offsetX}px)`,
         transition: offsetX === 0 ? 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
-        boxShadow: `inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.65), 0 14px 36px -4px rgba(0, 0, 0, 0.40), 0 0 20px ${accentColor}20`,
       }}
-      className={`relative w-full h-[64px] rounded-full liquid-glass-surface px-3 sm:px-3.5 flex items-center justify-between cursor-pointer group active:scale-[0.99] transition-transform overflow-hidden shadow-2xl ${className}`}
+      className={`relative w-full h-[64px] rounded-full liquid-glass-surface px-3 sm:px-3.5 flex items-center justify-between cursor-pointer group active:scale-[0.99] transition-transform overflow-hidden ${className}`}
     >
       {/* Real-time bottom progress bar */}
       <div className="absolute bottom-1.5 left-6 right-6 h-[2px] bg-white/15 overflow-hidden rounded-full pointer-events-none">
@@ -296,7 +295,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
 
         <button
           onClick={togglePlay}
-          className="w-10 h-10 rounded-full liquid-glass-circle flex items-center justify-center text-white border border-white/30 shadow-md active:scale-90 hover:scale-105 transition-all cursor-pointer ml-0.5"
+          className="w-10 h-10 rounded-full liquid-glass-circle flex items-center justify-center text-white active:scale-90 hover:scale-105 transition-all cursor-pointer ml-0.5"
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (

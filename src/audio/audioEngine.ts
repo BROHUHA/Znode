@@ -42,7 +42,10 @@ export class AudioEngine {
   private toneLowShelf: BiquadFilterNode | null = null;
   private toneHighShelf: BiquadFilterNode | null = null;
   private toneMidPeak: BiquadFilterNode | null = null;
-  private crossfadeDuration: number = 0;
+  private crossfadeDuration: number = 4;
+  private hasTriggeredCrossfade: boolean = false;
+  private isCrossfadingOut: boolean = false;
+  private crossfadeTimer: any = null;
 
   // Stored DSP Settings for real-time Web Audio API execution
   private currentEqGains: number[] = new Array(10).fill(0);
@@ -77,17 +80,22 @@ export class AudioEngine {
   private onTrackLoadedCallback?: () => void;
   private onErrorCallback?: (err: any) => void;
   private onPlayStateChangeCallback?: (isPlaying: boolean) => void;
+  private onCrossfadeCallback?: () => void;
 
   constructor() {
     this.audio = new Audio();
     this.audio.preload = 'auto';
     this.audio.crossOrigin = 'anonymous'; // Essential for Web Audio API DSP pipeline
+    this.audio.playbackRate = 1.0;
+    this.audio.defaultPlaybackRate = 1.0;
     (this.audio as any).preservesPitch = true;
 
     this.preloadAudio = new Audio();
     this.preloadAudio.preload = 'auto';
     this.preloadAudio.crossOrigin = 'anonymous';
     this.preloadAudio.volume = 0; // Kept silent during advance buffering
+    this.preloadAudio.playbackRate = 1.0;
+    this.preloadAudio.defaultPlaybackRate = 1.0;
     (this.preloadAudio as any).preservesPitch = true;
 
     this.preloadAudio.addEventListener('canplaythrough', () => {
@@ -210,6 +218,10 @@ export class AudioEngine {
             if (event.data === 1) {
               if (!this.isAdMuted) {
                 try {
+                  // Strictly enforce 1.0x normal speed (prevents persistent 2x speed)
+                  if (typeof this.ytPlayer.getPlaybackRate === 'function' && this.ytPlayer.getPlaybackRate() !== 1) {
+                    this.ytPlayer.setPlaybackRate(1);
+                  }
                   this.ytPlayer.setVolume(Math.round(this.currentVolume * 100));
                 } catch {}
                 if (this.onPlayStateChangeCallback) this.onPlayStateChangeCallback(true);
@@ -243,6 +255,12 @@ export class AudioEngine {
     this.mode = 'YOUTUBE';
     this.currentPlayingVideoId = videoId;
     this.isAdMuted = false;
+    this.hasTriggeredCrossfade = false;
+    this.isCrossfadingOut = false;
+    if (this.crossfadeTimer) {
+      clearInterval(this.crossfadeTimer);
+      this.crossfadeTimer = null;
+    }
     this.stopStallDetector();
     this.audio.pause();
     this.audio.removeAttribute('src');
@@ -277,12 +295,19 @@ export class AudioEngine {
 
     try {
       this.ytPlayer.unMute();
-      this.ytPlayer.setVolume(Math.round(this.currentVolume * 100));
+      this.ytPlayer.setVolume(this.crossfadeDuration > 0 ? 0 : Math.round(this.currentVolume * 100));
+      // Reset playback speed to 1.0x on every video load
+      try {
+        this.ytPlayer.setPlaybackRate?.(1);
+      } catch {}
       this.ytPlayer.loadVideoById({
         videoId,
         startSeconds: startTime,
       });
       this.ytPlayer.playVideo();
+      if (this.crossfadeDuration > 0) {
+        this.startCrossfadeIn(Math.min(3, this.crossfadeDuration));
+      }
     } catch (e) {
       console.warn('playVideo invocation error:', e);
     }
@@ -299,6 +324,18 @@ export class AudioEngine {
         const dur = this.ytPlayer.getDuration() || 0;
         if (this.onTimeUpdateCallback && !this.isAdMuted) {
           this.onTimeUpdateCallback(cur, dur);
+        }
+
+        // Crossfade spread trigger when approaching track end
+        if (this.crossfadeDuration > 0 && dur > 10 && cur > 0 && !this.isAdMuted) {
+          const remaining = dur - cur;
+          if (remaining <= this.crossfadeDuration && remaining > 0.4 && !this.hasTriggeredCrossfade) {
+            this.hasTriggeredCrossfade = true;
+            this.startCrossfadeOut(remaining);
+            if (this.onCrossfadeCallback) {
+              this.onCrossfadeCallback();
+            }
+          }
         }
       }
     }, 150);
@@ -337,19 +374,20 @@ export class AudioEngine {
         if (duration > 0) {
           this.ytPlayer.seekTo(duration, true);
         }
-        try {
-          // Accelerate ad to 16x speed
-          this.ytPlayer.setPlaybackRate?.(16);
-        } catch {}
       } else {
-        // Song is playing normally
+        // Song is playing normally: strictly enforce 1.0x playback rate
+        try {
+          if (typeof this.ytPlayer.getPlaybackRate === 'function' && this.ytPlayer.getPlaybackRate() !== 1) {
+            this.ytPlayer.setPlaybackRate(1);
+          }
+        } catch {}
+
         if (this.isAdMuted) {
           this.isAdMuted = false;
           try {
-            this.ytPlayer.setPlaybackRate?.(1);
+            this.ytPlayer.unMute();
+            this.ytPlayer.setVolume(Math.round(this.currentVolume * 100));
           } catch {}
-          this.ytPlayer.unMute();
-          this.ytPlayer.setVolume(Math.round(this.currentVolume * 100));
         }
       }
     } catch {}
@@ -436,8 +474,23 @@ export class AudioEngine {
         // Update stall detector: stream is alive
         this.lastTimeUpdateAt = Date.now();
         this.lastTimeUpdateValue = this.audio.currentTime;
+        const cur = this.audio.currentTime;
+        const dur = this.audio.duration || 0;
+
         if (this.onTimeUpdateCallback) {
-          this.onTimeUpdateCallback(this.audio.currentTime, this.audio.duration || 0);
+          this.onTimeUpdateCallback(cur, dur);
+        }
+
+        // Crossfade spread trigger when approaching track end
+        if (this.crossfadeDuration > 0 && dur > 10 && cur > 0) {
+          const remaining = dur - cur;
+          if (remaining <= this.crossfadeDuration && remaining > 0.4 && !this.hasTriggeredCrossfade) {
+            this.hasTriggeredCrossfade = true;
+            this.startCrossfadeOut(remaining);
+            if (this.onCrossfadeCallback) {
+              this.onCrossfadeCallback();
+            }
+          }
         }
       }
     });
@@ -589,6 +642,13 @@ export class AudioEngine {
       this.currentPlayingVideoId = videoId;
     }
 
+    this.hasTriggeredCrossfade = false;
+    this.isCrossfadingOut = false;
+    if (this.crossfadeTimer) {
+      clearInterval(this.crossfadeTimer);
+      this.crossfadeTimer = null;
+    }
+
     // Google Video direct links cannot be loaded in crossOrigin HTMLAudioElement due to browser CORS policies
     if (!streamUrl || streamUrl.includes('googlevideo.com')) {
       if (this.currentPlayingVideoId) {
@@ -619,9 +679,14 @@ export class AudioEngine {
       }
 
       this.audio.src = streamUrl;
-      this.audio.volume = this.currentVolume;
+      this.audio.volume = this.crossfadeDuration > 0 ? 0 : this.currentVolume;
+      this.audio.playbackRate = 1.0;
+      this.audio.defaultPlaybackRate = 1.0;
       this.audio.currentTime = startTime;
       await this.audio.play();
+      if (this.crossfadeDuration > 0) {
+        this.startCrossfadeIn(Math.min(3, this.crossfadeDuration));
+      }
       this.startStallDetector();
       if (this.onPlayStateChangeCallback) {
         this.onPlayStateChangeCallback(true);
@@ -761,6 +826,93 @@ export class AudioEngine {
 
   public onPlayStateChange(cb: (isPlaying: boolean) => void) {
     this.onPlayStateChangeCallback = cb;
+  }
+
+  public onCrossfade(cb: () => void) {
+    this.onCrossfadeCallback = cb;
+  }
+
+  public get wasCrossfaded(): boolean {
+    return this.hasTriggeredCrossfade;
+  }
+
+  private startCrossfadeOut(durationSec: number): void {
+    if (this.isCrossfadingOut) return;
+    this.isCrossfadingOut = true;
+    if (this.crossfadeTimer) {
+      clearInterval(this.crossfadeTimer);
+      this.crossfadeTimer = null;
+    }
+
+    const steps = 16;
+    const interval = Math.max(25, (durationSec * 1000) / steps);
+    let step = 0;
+    const startVol = this.currentVolume;
+
+    this.crossfadeTimer = setInterval(() => {
+      step++;
+      const ratio = Math.max(0, 1 - step / steps);
+      const v = startVol * ratio;
+      if (this.mode === 'HTML5') {
+        this.audio.volume = Math.max(0, Math.min(1, v));
+      } else if (this.mode === 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+        try {
+          this.ytPlayer.setVolume(Math.max(0, Math.round(v * 100)));
+        } catch {}
+      }
+
+      if (step >= steps) {
+        clearInterval(this.crossfadeTimer);
+        this.crossfadeTimer = null;
+        this.isCrossfadingOut = false;
+      }
+    }, interval);
+  }
+
+  private startCrossfadeIn(durationSec: number): void {
+    if (this.crossfadeTimer) {
+      clearInterval(this.crossfadeTimer);
+      this.crossfadeTimer = null;
+    }
+    this.isCrossfadingOut = false;
+
+    const targetVol = this.currentVolume;
+    const steps = 16;
+    const interval = Math.max(25, (durationSec * 1000) / steps);
+    let step = 0;
+
+    if (this.mode === 'HTML5') {
+      this.audio.volume = 0;
+    } else if (this.mode === 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+      try {
+        this.ytPlayer.setVolume(0);
+      } catch {}
+    }
+
+    this.crossfadeTimer = setInterval(() => {
+      step++;
+      const ratio = Math.min(1, step / steps);
+      const v = targetVol * ratio;
+      if (this.mode === 'HTML5') {
+        this.audio.volume = Math.max(0, Math.min(1, v));
+      } else if (this.mode === 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+        try {
+          this.ytPlayer.setVolume(Math.max(0, Math.round(v * 100)));
+        } catch {}
+      }
+
+      if (step >= steps) {
+        clearInterval(this.crossfadeTimer);
+        this.crossfadeTimer = null;
+        if (this.mode === 'HTML5') {
+          this.audio.volume = targetVol;
+        } else if (this.mode === 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+          try {
+            this.ytPlayer.setVolume(Math.round(targetVol * 100));
+          } catch {}
+        }
+      }
+    }, interval);
   }
 
   public updateMediaSession(song: Song) {

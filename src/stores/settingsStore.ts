@@ -45,7 +45,7 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set) => {
   const savedAccent = getStorage('accent_color') || '#FA2D48';
-  const savedCrossfade = parseInt(getStorage('crossfade') || '0', 10);
+  const savedCrossfade = getStorage('crossfade') !== null ? parseInt(getStorage('crossfade')!, 10) : 4;
   const savedModuleIndex = getStorage('module_index_url') || 'https://yz-music-sources.vercel.app/index.json';
   
   // Default to LOSSLESS audio
