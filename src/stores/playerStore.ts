@@ -188,6 +188,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   // Bind AudioEngine callbacks
   audioEngine.onTimeUpdate((currentTime, duration) => {
     set({ currentTime, duration });
+    audioEngine.updateMediaSessionPosition(currentTime, duration);
   });
 
   // === Error Recovery (YZ Music recoverFrom pattern) ===
@@ -214,6 +215,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       clearPlaybackTimeout();
       audioEngine.setVolume(get().volume);
     }
+    audioEngine.updateMediaSessionPlaybackState(isPlaying);
     set({ isPlaying });
   });
 
@@ -319,10 +321,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
   if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
     try {
-      navigator.mediaSession.setActionHandler('play', () => get().togglePlay());
-      navigator.mediaSession.setActionHandler('pause', () => get().togglePlay());
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (!get().isPlaying) get().togglePlay();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (get().isPlaying) get().togglePlay();
+      });
       navigator.mediaSession.setActionHandler('previoustrack', () => get().prev());
       navigator.mediaSession.setActionHandler('nexttrack', () => get().next());
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        get().seek(Math.max(0, get().currentTime - (details.seekOffset || 10)));
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        get().seek(Math.min(get().duration || 0, get().currentTime + (details.seekOffset || 10)));
+      });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (typeof details.seekTime === 'number') {
           get().seek(details.seekTime);

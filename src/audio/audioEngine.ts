@@ -54,6 +54,8 @@ export class AudioEngine {
   private ytFadeOutTimer: any = null;
   private playGeneration: number = 0;
   private isLoadingNewVideo: boolean = false;
+  private intendedPlaying: boolean = false;
+  private lastMediaPosUpdate: number = 0;
 
   private get audio(): HTMLAudioElement {
     return this.decks[this.activeDeckIndex];
@@ -102,6 +104,10 @@ export class AudioEngine {
       el.playbackRate = 1.0;
       el.defaultPlaybackRate = 1.0;
       (el as any).preservesPitch = true;
+      (el as any).playsInline = true;
+      el.setAttribute('playsinline', '');
+      el.setAttribute('webkit-playsinline', '');
+      el.setAttribute('x-webkit-airplay', 'allow');
       return el;
     };
 
@@ -114,6 +120,9 @@ export class AudioEngine {
     this.preloadAudio.playbackRate = 1.0;
     this.preloadAudio.defaultPlaybackRate = 1.0;
     (this.preloadAudio as any).preservesPitch = true;
+    (this.preloadAudio as any).playsInline = true;
+    this.preloadAudio.setAttribute('playsinline', '');
+    this.preloadAudio.setAttribute('webkit-playsinline', '');
 
     this.preloadAudio.addEventListener('canplaythrough', () => {
       this.preloadedReady = true;
@@ -138,7 +147,26 @@ export class AudioEngine {
 
     this.setupHtml5Listeners(0);
     this.setupHtml5Listeners(1);
+    this.setupBackgroundAudioKeepAlive();
     this.loadYouTubeIframeAPI();
+  }
+
+  private setupBackgroundAudioKeepAlive() {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+    const keepAlive = () => {
+      if (!this.intendedPlaying || this.mode !== 'HTML5') return;
+      if (this.ctx && this.ctx.state !== 'running') {
+        this.ctx.resume().catch(() => {});
+      }
+      if (this.audio.paused && this.audio.src) {
+        this.audio.play().catch(() => {});
+      }
+    };
+
+    document.addEventListener('visibilitychange', keepAlive);
+    window.addEventListener('pageshow', keepAlive);
+    window.addEventListener('focus', keepAlive);
   }
 
   // ---- YouTube Player Integration ----
@@ -280,6 +308,7 @@ export class AudioEngine {
 
   public async playVideo(videoId: string, startTime: number = 0, fromCrossfade: boolean = false): Promise<void> {
     const gen = ++this.playGeneration;
+    this.intendedPlaying = true;
     this.mode = 'YOUTUBE';
     this.currentPlayingVideoId = videoId;
     this.isAdMuted = false;
@@ -461,6 +490,11 @@ export class AudioEngine {
 
       if (!this.ctx) {
         this.ctx = new AudioCtx({ latencyHint: 'playback' });
+        this.ctx.onstatechange = () => {
+          if (this.ctx && this.ctx.state !== 'running' && this.intendedPlaying && this.mode === 'HTML5') {
+            this.ctx.resume().catch(() => {});
+          }
+        };
       }
       if (this.ctx.state === 'suspended') {
         this.ctx.resume().catch(() => {});
@@ -718,6 +752,7 @@ export class AudioEngine {
     }
 
     const gen = ++this.playGeneration;
+    this.intendedPlaying = true;
     this.hasTriggeredCrossfade = false;
     this.hasStartedYtFadeOut = false;
     this.isCrossfadingOut = false;
@@ -796,6 +831,7 @@ export class AudioEngine {
   // ---- Unified Transport Controls ----
 
   public pause(): void {
+    this.intendedPlaying = false;
     if (this.mode === 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       this.ytPlayer.pauseVideo();
       this.stopTicker();
@@ -805,12 +841,13 @@ export class AudioEngine {
   }
 
   public resume(): Promise<void> {
+    this.intendedPlaying = true;
     if (this.mode === 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
       this.ytPlayer.playVideo();
       this.startTicker();
       return Promise.resolve();
     } else {
-      if (this.ctx && this.ctx.state === 'suspended') {
+      if (this.ctx && this.ctx.state !== 'running') {
         this.ctx.resume().catch(() => {});
       }
       return this.audio.play();
@@ -1067,16 +1104,44 @@ export class AudioEngine {
     if (!('mediaSession' in navigator)) return;
 
     try {
+      const art = song.thumbnailUrl || '/logo-zn.png';
       navigator.mediaSession.metadata = new MediaMetadata({
         title: song.title,
         artist: song.artist,
         album: song.albumName || 'Znode Music',
         artwork: [
-          { src: song.thumbnailUrl || '/logo.svg', sizes: '512x512', type: 'image/jpeg' },
+          { src: art, sizes: '96x96', type: 'image/jpeg' },
+          { src: art, sizes: '192x192', type: 'image/jpeg' },
+          { src: art, sizes: '512x512', type: 'image/jpeg' },
         ],
       });
     } catch (e) {
       console.warn('Failed to update MediaSession metadata', e);
+    }
+  }
+
+  public updateMediaSessionPlaybackState(isPlaying: boolean) {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    } catch {}
+  }
+
+  public updateMediaSessionPosition(currentTime: number, duration: number) {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    if (typeof navigator.mediaSession.setPositionState !== 'function') return;
+    const now = Date.now();
+    if (now - this.lastMediaPosUpdate < 900) return;
+    this.lastMediaPosUpdate = now;
+
+    if (duration > 0 && isFinite(duration) && isFinite(currentTime)) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration,
+          playbackRate: 1.0,
+          position: Math.max(0, Math.min(currentTime, duration)),
+        });
+      } catch {}
     }
   }
 

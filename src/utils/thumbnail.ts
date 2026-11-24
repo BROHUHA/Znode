@@ -36,7 +36,9 @@ export function cleanThumbnailUrl(url?: string | null, videoId?: string | null):
       .replace('kPa7bsKwL-8', 'kPa7bsKwL-c')
       .replace('d5gf9dXHevw', 'V9PVRfjEBTI')
       .replace('LK7-_dgAVQE', 'V9PVRfjEBTI')
-      .replace('NgsWGfU97YQ', 'FvOpPeKSf_4');
+      .replace('NgsWGfU97YQ', 'FvOpPeKSf_4')
+      .replace('WcIcvapfqXw', 'LF2LGaCsMbc')
+      .replace('3IIspaicSnY', 'ki0Ocze98U8');
 
     if (fixedUrl.includes('hqdefault.jpg')) {
       return fixedUrl.replace('hqdefault.jpg', 'mqdefault.jpg');

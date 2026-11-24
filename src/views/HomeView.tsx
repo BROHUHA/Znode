@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { HomeShelf, ShelfItem, HomeChip, Song } from '../types';
 import { innertubeService } from '../services/innertube';
 import { trendingService, DEFAULT_HOME_CHIPS } from '../services/trendingService';
@@ -26,7 +26,7 @@ interface HomeViewProps {
 function cleanArtistFromSubtitle(subtitle: string): string {
   if (!subtitle) return '';
   const parts = subtitle.split(' • ').map((s) => s.trim()).filter(Boolean);
-  const typeWords = ['song', 'video', 'album', 'single', 'ep', 'playlist', 'artist'];
+  const typeWords = ['song', 'video', 'album', 'single', 'ep', 'playlist', 'artist', 'recently played'];
   const durationRegex = /^\d+:\d+(:\d+)?$/;
   const tallyRegex = /^\d+(\.\d+)?[kmb]?\s*(views|plays|subscribers|tracks|songs)?$/i;
 
@@ -53,10 +53,33 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
   const [continuation, setContinuation] = useState<string | null>(cachedFeed?.continuation || null);
   const [loading, setLoading] = useState<boolean>(!cachedFeed?.shelves?.length);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
-  const { playSong, setQueue } = usePlayerStore();
+  const { playSong, setQueue, currentSong } = usePlayerStore();
   const { isSignedIn, feedRefreshTrigger } = useAuthStore();
   const observerTarget = useRef<HTMLDivElement>(null);
   const quickPicksScrollRef = useRef<HTMLDivElement>(null);
+
+  const recentQuickPlayItems = useMemo<ShelfItem[]>(() => {
+    try {
+      const raw =
+        localStorage.getItem('znode_playback_history') ||
+        localStorage.getItem('yz_playback_history');
+      if (!raw) return [];
+      const history: Song[] = JSON.parse(raw);
+      if (!Array.isArray(history)) return [];
+      return history
+        .filter((s) => s && s.videoId && s.title)
+        .slice(0, 12)
+        .map((s) => ({
+          title: s.title,
+          subtitle: s.artist ? `Recently played • ${s.artist}` : 'Recently played',
+          thumbnailUrl: s.thumbnailUrl || null,
+          videoId: s.videoId,
+          isVideo: s.isVideo,
+        }));
+    } catch {
+      return [];
+    }
+  }, [currentSong?.videoId]);
 
   // Initial load: 0ms instant SWR hydration + background revalidation
   useEffect(() => {
@@ -65,43 +88,47 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
       setLoading(true);
     }
     innertubeService
-      .getHome()
+      .getHome(undefined, (enriched) => {
+        if (!isMounted || enriched.shelves.length === 0) return;
+        setShelves(enriched.shelves);
+        setAllShelves(enriched.shelves);
+        if (enriched.continuation) {
+          setContinuation(enriched.continuation);
+        }
+        feedCache.saveHomeFeedCache({
+          shelves: enriched.shelves,
+          chips: enriched.chips,
+          continuation: enriched.continuation,
+        });
+      })
       .then((data) => {
         if (!isMounted) return;
 
-        const enrichedShelves = [...data.shelves];
-        // Inject or replace with personalized Quick Picks
-        const qpIdx = enrichedShelves.findIndex(
-          (s) => s.type === 'QUICK_PICKS' || s.title?.toLowerCase().includes('quick picks')
-        );
-        const dynamicQp = trendingService.getQuickPicksShelf();
-        if (qpIdx >= 0) {
-          enrichedShelves[qpIdx] = dynamicQp;
-        } else {
-          enrichedShelves.unshift(dynamicQp);
-        }
+        const liveShelves =
+          data.shelves.length > 0
+            ? data.shelves
+            : [
+                trendingService.getQuickPicksShelf(),
+                trendingService.getTimeOfDayShelf(),
+                trendingService.getHitsShelf(),
+              ];
 
-        // Inject time-of-day contextual shelf if not already present
-        const timeShelf = trendingService.getTimeOfDayShelf();
-        const hasTimeShelf = enrichedShelves.some((s) => s.title === timeShelf.title);
-        if (!hasTimeShelf) {
-          enrichedShelves.splice(1, 0, timeShelf);
-        }
-
-        setShelves(enrichedShelves);
-        setAllShelves(enrichedShelves);
+        setShelves(liveShelves);
+        setAllShelves(liveShelves);
         if (data.chips && data.chips.length > 0) {
           setChips(data.chips);
         }
         setContinuation(data.continuation);
         setLoading(false);
 
-        // Cache for subsequent 0ms cold starts
-        feedCache.saveHomeFeedCache({
-          shelves: enrichedShelves,
-          chips: data.chips,
-          continuation: data.continuation,
-        });
+        // Cache live shelves for subsequent 0ms cold starts
+        if (data.shelves.length > 0) {
+          feedCache.saveHomeFeedCache({
+            shelves: liveShelves,
+            chips: data.chips,
+            continuation: data.continuation,
+          });
+        }
       })
       .catch((err) => {
         console.error('Failed to load Home feed', err);
@@ -186,6 +213,20 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
     });
   };
 
+  // Detect YouTube's 120x90 grey "..." placeholder image and replace with clean SVG fallback
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>, title: string) => {
+    const target = e.currentTarget;
+    if (
+      target.naturalWidth === 120 &&
+      target.naturalHeight === 90 &&
+      target.src.includes('ytimg.com')
+    ) {
+      const cleanInitial = (title || 'Song').trim().slice(0, 2).toUpperCase() || '♪';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 500 500"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2a1628"/><stop offset="100%" stop-color="#140d16"/></linearGradient></defs><rect width="500" height="500" fill="url(#g)" rx="24"/><text x="50%" y="54%" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="140" fill="#FA2D48" text-anchor="middle" dominant-baseline="middle">${cleanInitial}</text></svg>`;
+      target.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }
+  };
+
   // Robust image fallback handler that prevents broken image icons
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>, title: string) => {
     const target = e.currentTarget;
@@ -251,7 +292,16 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
     return () => observer.disconnect();
   }, [continuation, loadingMore, loadMoreShelves]);
 
-  const handleItemClick = (item: ShelfItem) => {
+  const handleItemClick = (item: ShelfItem, shelfTitle?: string) => {
+    if (shelfTitle) {
+      try {
+        const raw = localStorage.getItem('znode_shelf_affinity');
+        const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+        const key = shelfTitle.toLowerCase();
+        map[key] = (map[key] || 0) + 1;
+        localStorage.setItem('znode_shelf_affinity', JSON.stringify(map));
+      } catch {}
+    }
     if (item.videoId) {
       playSong({
         videoId: item.videoId,
@@ -364,22 +414,152 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
       </div>
 
       {/* 2. Shelves List */}
-      {shelves
-        .filter(
+      {(() => {
+        const validShelves = shelves.filter(
           (s) =>
             s.items.length > 0 &&
             s.items.some((it) => it.thumbnailUrl != null || it.stripeColor != null || it.videoId != null)
-        )
+        );
+        const isQuickPicksShelf = (s: HomeShelf) =>
+          s.type === 'QUICK_PICKS' || /quick picks|quick plays/i.test(s.title);
+        const quickPicksList = validShelves.filter(isQuickPicksShelf);
+        const otherShelves = validShelves.filter((s) => !isQuickPicksShelf(s));
+
+        // Relevance-based ordering for Home shelves using playback history, shelf affinity & time of day
+        let rankedOthers = otherShelves;
+        if (activeChip === 'all' && otherShelves.length > 1) {
+          let historySongs: Song[] = [];
+          let shelfAffinity: Record<string, number> = {};
+          try {
+            const rawHist =
+              localStorage.getItem('znode_playback_history') ||
+              localStorage.getItem('yz_playback_history');
+            if (rawHist) historySongs = JSON.parse(rawHist);
+            const rawAff = localStorage.getItem('znode_shelf_affinity');
+            if (rawAff) shelfAffinity = JSON.parse(rawAff);
+          } catch {}
+
+          const recentKeywords = new Set<string>();
+          const recentVideoIds = new Set<string>();
+          historySongs.slice(0, 25).forEach((s) => {
+            if (s.videoId) recentVideoIds.add(s.videoId);
+            `${s.title || ''} ${s.artist || ''}`
+              .toLowerCase()
+              .split(/[^a-z0-9]+/)
+              .filter((w) => w.length >= 3)
+              .forEach((w) => recentKeywords.add(w));
+          });
+          if (currentSong) {
+            if (currentSong.videoId) recentVideoIds.add(currentSong.videoId);
+            `${currentSong.title || ''} ${currentSong.artist || ''}`
+              .toLowerCase()
+              .split(/[^a-z0-9]+/)
+              .filter((w) => w.length >= 3)
+              .forEach((w) => recentKeywords.add(w));
+          }
+
+          const hour = new Date().getHours();
+          const scoreShelf = (shelf: HomeShelf, originalIdx: number): number => {
+            const titleLower = (shelf.title || '').toLowerCase();
+            const metaText = `${titleLower} ${(shelf.subtitle || '').toLowerCase()} ${(shelf.strapline || '').toLowerCase()}`;
+            let score = 0;
+
+            // 1. User recorded shelf/category affinity
+            score += Math.min((shelfAffinity[titleLower] || 0) * 14, 56);
+
+            // 2. Overlap with user's recent listening history (videoIds & artist/title keywords)
+            let itemMatches = 0;
+            for (const item of shelf.items) {
+              if (item.videoId && recentVideoIds.has(item.videoId)) {
+                itemMatches += 3;
+                continue;
+              }
+              const itemWords = `${item.title || ''} ${item.subtitle || ''}`
+                .toLowerCase()
+                .split(/[^a-z0-9]+/);
+              if (itemWords.some((w) => w.length >= 4 && recentKeywords.has(w))) {
+                itemMatches += 1;
+              }
+            }
+            score += Math.min(itemMatches * 8, 64);
+
+            // 3. Live YouTube Music personalized shelves & Charts stay prominent
+            if (/listen again|forgotten|for you|recommended|top 100|viral|trending|new release|hits/i.test(metaText)) {
+              score += 26;
+            }
+            if (/mollywood|kollywood|malayalam|tamil|bollywood|hindi/i.test(metaText)) {
+              score += 14;
+            }
+
+            // 4. Time-of-day contextual boost
+            if (hour >= 5 && hour < 12) {
+              if (/morning|energize|workout|focus|chill|acoustic/i.test(metaText)) score += 20;
+            } else if (hour >= 12 && hour < 17) {
+              if (/hit|top 100|trending|new release|pop|mollywood|kollywood|bollywood/i.test(metaText)) score += 20;
+            } else if (hour >= 17 && hour < 21) {
+              if (/party|edm|hip-hop|punjabi|workout|music video|mollywood|kollywood/i.test(metaText)) score += 20;
+            } else {
+              if (/late night|chill|lo-fi|romantic|focus|soulful|covers|remix/i.test(metaText)) score += 22;
+            }
+
+            // 5. De-prioritize non-music podcast episodes unless user engages with them
+            if (/episode|podcast/i.test(metaText) && !(shelfAffinity[titleLower] > 0)) {
+              score -= 30;
+            }
+
+            // Small tie-breaker favoring original feed order
+            score -= originalIdx * 0.25;
+            return score;
+          };
+
+          rankedOthers = [...otherShelves]
+            .map((shelf, idx) => ({ shelf, score: scoreShelf(shelf, idx) }))
+            .sort((a, b) => b.score - a.score)
+            .map((entry) => entry.shelf);
+
+          // Deduplicate shelves that share >50% identical items with an already-shown shelf
+          const seenSignatures = new Set<string>();
+          rankedOthers = rankedOthers.filter((shelf) => {
+            if (/mood|genre/i.test(shelf.title)) return true;
+            const keys = shelf.items
+              .map((it) => it.videoId || it.browseId || it.title.toLowerCase())
+              .filter(Boolean);
+            if (keys.length === 0) return false;
+            const overlap = keys.filter((k) => seenSignatures.has(k)).length;
+            if (overlap / keys.length > 0.5) return false;
+            keys.forEach((k) => seenSignatures.add(k));
+            return true;
+          });
+        }
+
+        const orderedShelves =
+          quickPicksList.length > 0
+            ? [...quickPicksList, ...rankedOthers]
+            : activeChip === 'all'
+              ? [trendingService.getQuickPicksShelf(), ...rankedOthers]
+              : rankedOthers;
+        return orderedShelves;
+      })()
         .map((shelf, shelfIdx) => {
           const isQuickPicks =
             shelf.type === 'QUICK_PICKS' || /quick picks|quick plays/i.test(shelf.title);
-          const isHero =
-            !isQuickPicks &&
-            (shelf.type === 'HERO' ||
-              (shelfIdx === 0 && shelf.type !== 'DEFAULT' && shelf.items[0]?.thumbnailUrl != null));
-          const isMoodGenre = shelf.type === 'MOOD_GENRE';
+          const isHero = false;
+          const isMoodGenre =
+            shelf.type === 'MOOD_GENRE' ||
+            /mood|genre/i.test(shelf.title) ||
+            (shelf.items.length > 0 &&
+              shelf.items.every((it) => it.stripeColor != null || (!it.thumbnailUrl && !it.videoId)));
           const isVideo = shelf.type === 'VIDEO';
           const isRanked = shelf.type === 'RANKED' || shelf.type === 'CHART_SONGS';
+          const quickPlayItems =
+            isQuickPicks && recentQuickPlayItems.length > 0
+              ? [
+                  ...recentQuickPlayItems,
+                  ...shelf.items.filter(
+                    (it) => !it.videoId || !recentQuickPlayItems.some((r) => r.videoId === it.videoId)
+                  ),
+                ]
+              : shelf.items;
 
           const showAllAction =
             shelf.moreBrowseId && onOpenDetail
@@ -420,7 +600,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                   {isQuickPicks && (
                     <>
                       <button
-                        onClick={() => handlePlayAll(shelf)}
+                        onClick={() => handlePlayAll({ ...shelf, items: quickPlayItems })}
                         className="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-xs font-semibold text-white border border-white/15 flex items-center gap-1.5 cursor-pointer shadow-sm"
                         title="Play all tracks in order"
                       >
@@ -468,10 +648,10 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                       gridAutoColumns: 'clamp(280px, 32vw, 360px)',
                     }}
                   >
-                    {shelf.items.map((item, itemIdx) => (
+                    {quickPlayItems.map((item, itemIdx) => (
                       <div
                         key={itemIdx}
-                        onClick={() => handleItemClick(item)}
+                        onClick={() => handleItemClick(item, shelf.title)}
                         className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-white/[0.08] transition-all group/item cursor-pointer snap-start select-none"
                       >
                         {/* 48x48 Thumbnail with hover Play overlay */}
@@ -481,7 +661,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                             alt={item.title}
                             referrerPolicy="no-referrer"
                             loading="lazy"
-                            onError={(e) => handleImageError(e, item.title)}
+                            onError={(e) => handleImageError(e, item.title)} onLoad={(e) => handleImageLoad(e, item.title)}
                             className="w-full h-full object-cover transition-transform duration-300 group-hover/item:scale-105"
                           />
                           <div className="absolute inset-0 bg-black/45 opacity-0 group-hover/item:opacity-100 transition-opacity flex items-center justify-center">
@@ -510,7 +690,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                   {shelf.items.map((item, itemIdx) => (
                     <div
                       key={itemIdx}
-                      onClick={() => handleItemClick(item)}
+                      onClick={() => handleItemClick(item, shelf.title)}
                       className="w-[70vw] max-w-[320px] aspect-[0.92/1] shrink-0 rounded-[18px] overflow-hidden bg-white/[0.06] border border-white/15 relative group cursor-pointer snap-start shadow-xl select-none"
                     >
                       <img
@@ -518,7 +698,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                         alt={item.title}
                         referrerPolicy="no-referrer"
                         loading="lazy"
-                        onError={(e) => handleImageError(e, item.title)}
+                        onError={(e) => handleImageError(e, item.title)} onLoad={(e) => handleImageLoad(e, item.title)}
                         className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
                       />
 
@@ -550,7 +730,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                           return (
                             <div
                               key={pIdx}
-                              onClick={() => handleItemClick(item)}
+                              onClick={() => handleItemClick(item, shelf.title)}
                               className="w-[170px] h-[50px] rounded-[12px] bg-white/[0.06] border border-white/15 hover:border-white/25 relative overflow-hidden flex items-center px-3.5 cursor-pointer group transition-all select-none"
                               style={{
                                 background: `linear-gradient(90deg, ${stripe}40 0%, rgba(255,255,255,0.05) 100%)`,
@@ -579,7 +759,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                   {shelf.items.map((item, itemIdx) => (
                     <div
                       key={itemIdx}
-                      onClick={() => handleItemClick(item)}
+                      onClick={() => handleItemClick(item, shelf.title)}
                       className="w-[220px] shrink-0 flex flex-col cursor-pointer group snap-start select-none"
                     >
                       <div className="w-full aspect-[1.778/1] rounded-[12px] overflow-hidden bg-white/[0.06] border border-white/15 relative">
@@ -588,7 +768,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                           alt={item.title}
                           referrerPolicy="no-referrer"
                           loading="lazy"
-                          onError={(e) => handleImageError(e, item.title)}
+                          onError={(e) => handleImageError(e, item.title)} onLoad={(e) => handleImageLoad(e, item.title)}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/[0.45] to-transparent pointer-events-none" />
@@ -627,7 +807,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                   {shelf.items.map((item, itemIdx) => (
                     <div
                       key={itemIdx}
-                      onClick={() => handleItemClick(item)}
+                      onClick={() => handleItemClick(item, shelf.title)}
                       className="w-[150px] shrink-0 flex flex-col cursor-pointer group snap-start select-none"
                     >
                       <div className="w-full aspect-square rounded-[12px] overflow-hidden bg-white/[0.06] border border-white/15 relative">
@@ -636,7 +816,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                           alt={item.title}
                           referrerPolicy="no-referrer"
                           loading="lazy"
-                          onError={(e) => handleImageError(e, item.title)}
+                          onError={(e) => handleImageError(e, item.title)} onLoad={(e) => handleImageLoad(e, item.title)}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                         />
 
@@ -676,7 +856,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                   {shelf.items.map((item, itemIdx) => (
                     <div
                       key={itemIdx}
-                      onClick={() => handleItemClick(item)}
+                      onClick={() => handleItemClick(item, shelf.title)}
                       className="w-[150px] shrink-0 flex flex-col cursor-pointer group snap-start select-none"
                     >
                       <div className="w-full aspect-square rounded-[12px] overflow-hidden bg-white/[0.06] border border-white/15 relative">
@@ -685,7 +865,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) =
                           alt={item.title}
                           referrerPolicy="no-referrer"
                           loading="lazy"
-                          onError={(e) => handleImageError(e, item.title)}
+                          onError={(e) => handleImageError(e, item.title)} onLoad={(e) => handleImageLoad(e, item.title)}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                         />
 

@@ -838,8 +838,8 @@ export const HIPHOP_ITEMS: ShelfItem[] = [
   {
     title: 'MILLION DOLLAR BABY',
     subtitle: 'Tommy Richman',
-    thumbnailUrl: 'https://i.ytimg.com/vi/WcIcvapfqXw/mqdefault.jpg',
-    videoId: 'WcIcvapfqXw',
+    thumbnailUrl: 'https://i.ytimg.com/vi/LF2LGaCsMbc/mqdefault.jpg',
+    videoId: 'LF2LGaCsMbc',
     customIndex: '4',
   },
   {
@@ -852,8 +852,8 @@ export const HIPHOP_ITEMS: ShelfItem[] = [
   {
     title: 'One Dance',
     subtitle: 'Drake, Wizkid, Kyla • Views',
-    thumbnailUrl: 'https://i.ytimg.com/vi/3IIspaicSnY/mqdefault.jpg',
-    videoId: '3IIspaicSnY',
+    thumbnailUrl: 'https://i.ytimg.com/vi/ki0Ocze98U8/mqdefault.jpg',
+    videoId: 'ki0Ocze98U8',
     customIndex: '6',
   },
   {
@@ -1612,6 +1612,64 @@ export class TrendingService {
       strapline: 'EDM & Dance',
       type: 'DEFAULT',
       items: EDM_ITEMS,
+    };
+  }
+
+  public getWorkoutShelf(): HomeShelf {
+    return {
+      title: 'Workout & Gym Energy',
+      subtitle: 'High-tempo beats, phonk, bass & adrenaline boosters',
+      strapline: 'Workout',
+      type: 'DEFAULT',
+      items: [
+        ...HIPHOP_ITEMS.slice(0, 4),
+        ...EDM_ITEMS.slice(0, 4),
+        ...PUNJABI_ITEMS.slice(0, 3),
+        ...KOLLYWOOD_ITEMS.slice(0, 3),
+      ],
+    };
+  }
+
+  public getRomanticShelf(): HomeShelf {
+    return {
+      title: 'Romantic & Soulful Melodies',
+      subtitle: 'Heartfelt love songs across Mollywood, Kollywood, Bollywood & Global',
+      strapline: 'Romance',
+      type: 'DEFAULT',
+      items: [
+        ...MOLLYWOOD_ITEMS.slice(0, 4),
+        ...BOLLYWOOD_ITEMS.slice(0, 4),
+        ...KOLLYWOOD_ITEMS.slice(2, 6),
+        ...ENGLISH_GLOBAL_ITEMS.slice(0, 4),
+      ],
+    };
+  }
+
+  public getPartyShelf(): HomeShelf {
+    return {
+      title: 'Party & Club Anthems',
+      subtitle: 'Non-stop dance floor bangers & weekend hype mixes',
+      strapline: 'Party',
+      type: 'DEFAULT',
+      items: [
+        ...PUNJABI_ITEMS.slice(0, 4),
+        ...BOLLYWOOD_ITEMS.slice(2, 6),
+        ...EDM_ITEMS.slice(2, 6),
+        ...TOLLYWOOD_ITEMS.slice(0, 4),
+      ],
+    };
+  }
+
+  public getFocusShelf(): HomeShelf {
+    return {
+      title: 'Focus & Deep Study',
+      subtitle: 'Calm acoustics, lo-fi instrumentals & concentration flows',
+      strapline: 'Focus',
+      type: 'DEFAULT',
+      items: [
+        ...CHILL_LOFI_ITEMS,
+        ...ENGLISH_GLOBAL_ITEMS.slice(4, 8),
+      ],
     };
   }
 

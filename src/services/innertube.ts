@@ -178,51 +178,32 @@ export class InnertubeService {
   /**
    * Home Feed: Listen Now shelves + Recently Played + Dynamic Trending & Chips
    */
-  public async getHome(params?: string): Promise<HomeFeed> {
+  public async getHome(
+    params?: string,
+    onEnrich?: (enriched: HomeFeed) => void
+  ): Promise<HomeFeed> {
     const body: any = { browseId: 'FEmusic_home' };
     if (params) {
       body.params = params;
     }
 
-    const [homeRaw, newReleasesRaw, chartsRaw, historySongs] = await Promise.allSettled([
-      this.post('browse', body),
-      !params ? this.post('browse', { browseId: 'FEmusic_new_releases' }) : Promise.resolve(null),
-      !params ? this.post('browse', { browseId: 'FEmusic_charts' }) : Promise.resolve(null),
-      !params && (this.cookie || this.accessToken) ? this.getHistory() : Promise.resolve([]),
-    ]);
+    // Fire secondary enrichment requests in parallel, but never block the primary home feed on them
+    const secondaryPromise = !params
+      ? Promise.allSettled([
+          this.post('browse', { browseId: 'FEmusic_explore' }),
+          this.post('browse', { browseId: 'FEmusic_new_releases' }),
+          this.post('browse', { browseId: 'FEmusic_charts' }),
+          this.post('browse', { browseId: 'FEmusic_moods_and_genres' }),
+          this.cookie || this.accessToken ? this.getHistory() : Promise.resolve([] as Song[]),
+        ])
+      : null;
 
-    const homeFeed =
-      homeRaw.status === 'fulfilled'
-        ? this.parseHome(homeRaw.value)
-        : { shelves: [], continuation: null, chips: [] };
-
-    // Merge live dynamic shelves from new releases and charts (exact APK replication from YtMusicRepository.kt:58)
-    if (!params) {
-      const seenTitles = new Set(
-        homeFeed.shelves.map((s) => (s.title || '').trim().toLowerCase())
-      );
-
-      if (newReleasesRaw.status === 'fulfilled' && newReleasesRaw.value) {
-        const nrShelves = this.parseShelves(newReleasesRaw.value);
-        for (const shelf of nrShelves) {
-          const norm = (shelf.title || '').trim().toLowerCase();
-          if (norm && !seenTitles.has(norm) && shelf.items.length > 0) {
-            seenTitles.add(norm);
-            homeFeed.shelves.push(shelf);
-          }
-        }
-      }
-
-      if (chartsRaw.status === 'fulfilled' && chartsRaw.value) {
-        const chartShelves = this.parseShelves(chartsRaw.value);
-        for (const shelf of chartShelves) {
-          const norm = (shelf.title || '').trim().toLowerCase();
-          if (norm && !seenTitles.has(norm) && shelf.items.length > 0) {
-            seenTitles.add(norm);
-            homeFeed.shelves.push(shelf);
-          }
-        }
-      }
+    let homeFeed: HomeFeed = { shelves: [], continuation: null, chips: [] };
+    try {
+      const homeRaw = await this.post('browse', body);
+      homeFeed = this.parseHome(homeRaw);
+    } catch (e) {
+      console.warn('Primary FEmusic_home fetch failed:', e);
     }
 
     // Curate and order the chips list:
@@ -276,116 +257,149 @@ export class InnertubeService {
 
     homeFeed.chips = curatedChips;
 
-    // When on default 'All' feed, ensure dynamic trend shelves are ALWAYS present every time
-    if (!params) {
-      const hasQuickPicks = homeFeed.shelves.some(
-        (s) => s.type === 'QUICK_PICKS' || /quick picks|quick plays/i.test(s.title)
-      );
-      if (!hasQuickPicks) {
-        homeFeed.shelves.unshift(trendingService.getQuickPicksShelf());
-      }
-
-      const hasHits = homeFeed.shelves.some((s) => /today's hits|top hits/i.test(s.title));
-      if (!hasHits) {
-        homeFeed.shelves.splice(1, 0, trendingService.getHitsShelf());
-      }
-
-      const hasNewReleases = homeFeed.shelves.some((s) => /new release|fresh drop/i.test(s.title));
-      if (!hasNewReleases) {
-        homeFeed.shelves.splice(2, 0, trendingService.getNewReleasesShelf());
-      }
-
-      const hasVideos = homeFeed.shelves.some((s) => s.type === 'VIDEO' || /music video|video song/i.test(s.title));
-      if (!hasVideos) {
-        homeFeed.shelves.splice(3, 0, trendingService.getMusicVideosShelf());
-      }
-
-      const hasCovers = homeFeed.shelves.some((s) => /cover|remix/i.test(s.title));
-      if (!hasCovers) {
-        homeFeed.shelves.splice(4, 0, trendingService.getCoversRemixesShelf());
-      }
-
-      const hasCommunity = homeFeed.shelves.some((s) => /community/i.test(s.title));
-      if (!hasCommunity) {
-        homeFeed.shelves.splice(5, 0, trendingService.getTrendingCommunityShelf());
-      }
-
-      const hasRegional = homeFeed.shelves.some(
-        (s) => /south|blockbusters|spotlight|regional/i.test(s.title)
-      );
-      if (!hasRegional) {
-        homeFeed.shelves.splice(6, 0, trendingService.getRegionalSpotlightShelf());
-      }
-
-      const hasSeasonal = homeFeed.shelves.some(
-        (s) => /diwali|festive|season|bash/i.test(s.title)
-      );
-      if (!hasSeasonal) {
-        homeFeed.shelves.splice(7, 0, trendingService.getSeasonalShelf());
-      }
-
-      // Rich language & genre shelves for comprehensive continuous feed
-      const hasMalayalam = homeFeed.shelves.some((s) => /malayalam|mollywood/i.test(s.title));
-      if (!hasMalayalam) {
-        homeFeed.shelves.push(trendingService.getMalayalamShelf());
-      }
-
-      const hasTamil = homeFeed.shelves.some((s) => /tamil|kollywood/i.test(s.title));
-      if (!hasTamil) {
-        homeFeed.shelves.push(trendingService.getTamilShelf());
-      }
-
-      const hasEnglish = homeFeed.shelves.some((s) => /english|global hot/i.test(s.title));
-      if (!hasEnglish) {
-        homeFeed.shelves.push(trendingService.getEnglishShelf());
-      }
-
-      const hasHindi = homeFeed.shelves.some((s) => /hindi|bollywood/i.test(s.title));
-      if (!hasHindi) {
-        homeFeed.shelves.push(trendingService.getHindiShelf());
-      }
-
-      const hasTelugu = homeFeed.shelves.some((s) => /telugu|tollywood/i.test(s.title));
-      if (!hasTelugu) {
-        homeFeed.shelves.push(trendingService.getTeluguShelf());
-      }
-
-      const hasPunjabi = homeFeed.shelves.some((s) => /punjabi/i.test(s.title));
-      if (!hasPunjabi) {
-        homeFeed.shelves.push(trendingService.getPunjabiShelf());
-      }
-
-      const hasHipHop = homeFeed.shelves.some((s) => /hip-hop|rap/i.test(s.title));
-      if (!hasHipHop) {
-        homeFeed.shelves.push(trendingService.getHipHopShelf());
-      }
-
-      const hasChill = homeFeed.shelves.some((s) => /chill|lo-fi/i.test(s.title));
-      if (!hasChill) {
-        homeFeed.shelves.push(trendingService.getChillLofiShelf());
-      }
-
-      const hasEdm = homeFeed.shelves.some((s) => /edm|dance/i.test(s.title));
-      if (!hasEdm) {
-        homeFeed.shelves.push(trendingService.getEdmShelf());
-      }
+    // Only fall back to static Quick Picks if live FEmusic_home returned nothing
+    if (!params && homeFeed.shelves.length === 0) {
+      homeFeed.shelves.unshift(trendingService.getQuickPicksShelf());
     }
 
-    if (!params && historySongs.status === 'fulfilled' && historySongs.value.length > 0) {
-      const recentItems: ShelfItem[] = historySongs.value.slice(0, 15).map((song) => ({
-        title: song.title,
-        subtitle: song.artist,
-        thumbnailUrl: song.thumbnailUrl,
-        videoId: song.videoId,
-      }));
+    // Enrich with live Home continuation, Explore, New Releases, Charts, Moods & Genres, and Recently Played in background
+    if (secondaryPromise) {
+      const contPromise = homeFeed.continuation
+        ? this.getMoreHome(homeFeed.continuation).catch(() => null)
+        : Promise.resolve(null);
 
-      // Lead shelf: account's listening history matching YtMusicRepository.kt
-      homeFeed.shelves.unshift({
-        title: 'Recently played',
-        subtitle: 'From your listening history',
-        items: recentItems,
-        type: 'DEFAULT' as any,
-      });
+      Promise.all([secondaryPromise, contPromise]).then(
+        ([[exploreRaw, newReleasesRaw, chartsRaw, moodsRaw, historyRes], contFeed]) => {
+          const mergedShelves = [...homeFeed.shelves];
+          const seenTitles = new Set(
+            mergedShelves.map((s) => (s.title || '').trim().toLowerCase())
+          );
+          let nextContinuation = homeFeed.continuation;
+          let added = false;
+
+          const appendShelves = (list: HomeShelf[]) => {
+            for (const shelf of list) {
+              const norm = (shelf.title || '').trim().toLowerCase();
+              if (norm && !seenTitles.has(norm) && shelf.items.length > 0) {
+                seenTitles.add(norm);
+                mergedShelves.push(shelf);
+                added = true;
+              }
+            }
+          };
+
+          if (historyRes.status === 'fulfilled' && Array.isArray(historyRes.value) && historyRes.value.length > 0) {
+            const recentItems: ShelfItem[] = historyRes.value.slice(0, 15).map((song) => ({
+              title: song.title,
+              subtitle: song.artist,
+              thumbnailUrl: song.thumbnailUrl,
+              videoId: song.videoId,
+            }));
+            if (!seenTitles.has('recently played')) {
+              seenTitles.add('recently played');
+              mergedShelves.unshift({
+                title: 'Recently played',
+                subtitle: 'From your listening history',
+                items: recentItems,
+                type: 'DEFAULT' as any,
+              });
+              added = true;
+            }
+          }
+
+          if (contFeed && contFeed.shelves.length > 0) {
+            appendShelves(contFeed.shelves);
+            nextContinuation = contFeed.continuation;
+          }
+
+          if (exploreRaw.status === 'fulfilled' && exploreRaw.value) {
+            appendShelves(this.parseShelves(exploreRaw.value));
+          }
+
+          if (newReleasesRaw.status === 'fulfilled' && newReleasesRaw.value) {
+            appendShelves(this.parseShelves(newReleasesRaw.value));
+          }
+
+          if (chartsRaw.status === 'fulfilled' && chartsRaw.value) {
+            appendShelves(this.parseShelves(chartsRaw.value));
+          }
+
+          if (moodsRaw.status === 'fulfilled' && moodsRaw.value) {
+            appendShelves(this.parseShelves(moodsRaw.value));
+          }
+
+          // Ensure official YouTube Music Charts playlists are included
+          if (!seenTitles.has('top 100 & viral charts')) {
+            seenTitles.add('top 100 & viral charts');
+            mergedShelves.push({
+              title: 'Top 100 & Viral Charts',
+              subtitle: 'Official YouTube Music charts updated daily',
+              strapline: 'CHARTS',
+              type: 'DEFAULT' as any,
+              items: [
+                {
+                  title: 'Top 100: Global',
+                  subtitle: 'The most played songs globally',
+                  thumbnailUrl: 'https://i.ytimg.com/vi/Etkd-07gnxM/hqdefault.jpg',
+                  browseId: 'VLPL4fGSI46T250j298PrMtcms0bhcpTrU0S',
+                },
+                {
+                  title: 'Top 100: India',
+                  subtitle: 'Most played songs in India',
+                  thumbnailUrl: 'https://i.ytimg.com/vi/k4yXQkG2s1E/hqdefault.jpg',
+                  browseId: 'VLPL4fGSI46T252gG_7dY7oM4d9a-zL3L1aL',
+                },
+                {
+                  title: 'Viral 50: Global',
+                  subtitle: 'Songs trending right now',
+                  thumbnailUrl: 'https://i.ytimg.com/vi/VAdGW7QDJiU/hqdefault.jpg',
+                  browseId: 'VLPL4fGSI46T251uWl8B_Wf3g7f0o4V4jH1T',
+                },
+                {
+                  title: 'Top 100: Music Videos',
+                  subtitle: 'Most viewed music videos',
+                  thumbnailUrl: 'https://i.ytimg.com/vi/0pWsCiBvLOk/hqdefault.jpg',
+                  browseId: 'VLPL4fGSI46T252jA06tkyvPj94Kk3m33u4e',
+                },
+                {
+                  title: 'Top 100: United States',
+                  subtitle: 'The biggest hits in the US',
+                  thumbnailUrl: 'https://i.ytimg.com/vi/BtQp2U6hJII/hqdefault.jpg',
+                  browseId: 'VLPL4fGSI46T251j4R_qV7jWv8K_8t_aHlY_',
+                },
+              ],
+            });
+            added = true;
+          }
+
+          // Include distinct regional, mood & genre shelves (each backed by its own unique catalog)
+          appendShelves([
+            trendingService.getMalayalamShelf(),
+            trendingService.getTamilShelf(),
+            trendingService.getHindiShelf(),
+            trendingService.getTeluguShelf(),
+            trendingService.getPunjabiShelf(),
+            trendingService.getEnglishShelf(),
+            trendingService.getNewReleasesShelf(),
+            trendingService.getHipHopShelf(),
+            trendingService.getChillLofiShelf(),
+            trendingService.getEdmShelf(),
+            trendingService.getMusicVideosShelf(),
+            trendingService.getCoversRemixesShelf(),
+            trendingService.getTrendingCommunityShelf(),
+            trendingService.getRegionalSpotlightShelf(),
+            trendingService.getSeasonalShelf(),
+          ]);
+
+          if (added && onEnrich) {
+            onEnrich({
+              ...homeFeed,
+              shelves: mergedShelves,
+              continuation: nextContinuation,
+            });
+          }
+        }
+      );
     }
 
     return homeFeed;
