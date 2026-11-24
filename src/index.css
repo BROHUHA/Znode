@@ -17,7 +17,19 @@ body {
   overflow: hidden;
 }
 
-/* 1. Global scrollbar suppression - eliminates all scroll guidelines and scroll tracks */
+/* 1. Global Performance Scrolling */
+html,
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+main,
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Global scrollbar suppression - eliminates all scroll guidelines and scroll tracks */
 * {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
@@ -28,22 +40,29 @@ body {
   height: 0 !important;
 }
 
-/* 2. Liquid Glass System (Authentic Apple iOS / VisionOS White Liquid Glass) */
-.liquid-glass {
+/* 2. Liquid Glass System (Frosted Glass with Specular Rim) */
+.liquid-glass,
+.liquid-glass-surface,
+.liquid-glass-accessory,
+.liquid-glass-tabbar {
   position: relative;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.16) 100%);
-  backdrop-filter: blur(32px) saturate(210%) brightness(112%);
-  -webkit-backdrop-filter: blur(32px) saturate(210%) brightness(112%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-top: 1px solid rgba(255, 255, 255, 0.70);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 
-    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.85), 
-    inset 0 -1px 2px 0 rgba(255, 255, 255, 0.35),
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.30),
-    inset 0 0 16px 2px rgba(255, 255, 255, 0.12), 
-    0 20px 48px -10px rgba(0, 0, 0, 0.50),
-    0 8px 20px -4px rgba(0, 0, 0, 0.30);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.12) 100%
+  ) !important;
+  backdrop-filter: blur(28px) saturate(190%) brightness(108%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) brightness(108%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.34) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.80) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.24) !important;
+  box-shadow:
+    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.80),
+    inset 0 -1.5px 2px 0 rgba(255, 255, 255, 0.30),
+    inset 0 0 18px 0 rgba(255, 255, 255, 0.08),
+    0 14px 34px -6px rgba(0, 0, 0, 0.44),
+    0 4px 12px 0 rgba(0, 0, 0, 0.20) !important;
 }
 
 .liquid-glass-sidebar {
@@ -105,118 +124,66 @@ body {
   background: rgba(255, 255, 255, 0.10);
 }
 
-/* 2. Liquid Glass System (Apple iOS / VisionOS Liquid Glass with True Edge Refraction & Specular Lens Sheen) */
-.liquid-glass-surface,
-.liquid-glass-accessory,
-.liquid-glass-tabbar {
-  position: relative;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.16) 100%) !important;
-  backdrop-filter: blur(32px) saturate(210%) brightness(112%) !important;
-  -webkit-backdrop-filter: blur(32px) saturate(210%) brightness(112%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.35) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.70) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 
-    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.85), 
-    inset 0 -1px 2px 0 rgba(255, 255, 255, 0.35),
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.30),
-    inset 0 0 16px 2px rgba(255, 255, 255, 0.12), 
-    0 20px 48px -10px rgba(0, 0, 0, 0.50),
-    0 8px 20px -4px rgba(0, 0, 0, 0.30) !important;
-}
-
-/* Specular Lens Sheen / Light Glare Layer (creates physical optical bubble curvature) */
-.liquid-glass-surface::before,
-.liquid-glass-accessory::before,
-.liquid-glass-tabbar::before,
-.liquid-glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.30) 0%,
-    rgba(255, 255, 255, 0.08) 35%,
-    rgba(255, 255, 255, 0.00) 65%
-  );
-  mix-blend-mode: overlay;
-  z-index: 1;
-}
-
-/* Subtle 1.2px Inner Specular Border Gradient with mix-blend-mode: plus-lighter
-   Dynamic additive illumination: bright colors from underlying album artwork light up the glass rim */
-.liquid-glass-surface::after,
-.liquid-glass-accessory::after,
-.liquid-glass-tabbar::after,
-.liquid-glass::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  padding: 1.2px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 255, 255, 0.15) 40%, rgba(255, 255, 255, 0.55) 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  mix-blend-mode: plus-lighter;
-  z-index: 2;
-}
-
-/* Transparent White Liquid Glass Badge (ZN Logo, Play Buttons & circular badges) */
+/* Transparent White Frosted Liquid Glass Badge (ZN Logo, Play Buttons & circular badges) */
 .liquid-glass-circle {
   position: relative;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.10) 50%, rgba(255, 255, 255, 0.18) 100%) !important;
-  backdrop-filter: blur(28px) saturate(200%) brightness(115%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(115%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.35) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.75) !important;
-  box-shadow: 
-    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.85), 
-    inset 0 -1px 2px 0 rgba(255, 255, 255, 0.30),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.25),
-    inset 0 0 10px 0 rgba(255, 255, 255, 0.12),
-    0 8px 24px -4px rgba(0, 0, 0, 0.40) !important;
+  background: radial-gradient(
+    circle at 30% 25%,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(255, 255, 255, 0.10) 58%,
+    rgba(255, 255, 255, 0.16) 100%
+  ) !important;
+  backdrop-filter: blur(24px) saturate(190%) brightness(108%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) brightness(108%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.40) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.90) !important;
+  box-shadow:
+    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1.5px 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 0 12px 0 rgba(255, 255, 255, 0.10),
+    0 6px 20px -2px rgba(0, 0, 0, 0.35) !important;
   transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.liquid-glass-circle::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.35) 0%,
-    rgba(255, 255, 255, 0.08) 40%,
-    rgba(255, 255, 255, 0.00) 70%
-  );
-  mix-blend-mode: overlay;
-  z-index: 1;
-}
-
-.liquid-glass-circle::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 255, 255, 0.20) 45%, rgba(255, 255, 255, 0.50) 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  mix-blend-mode: plus-lighter;
-  z-index: 2;
-}
-
 .liquid-glass-circle:hover {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.24) 100%) !important;
+  background: rgba(255, 255, 255, 0.24) !important;
+}
+
+/* Sidebar Active Liquid Glass Pill */
+.sidebar-active-pill {
+  background: linear-gradient(135deg, rgba(255, 42, 75, 0.90) 0%, rgba(217, 4, 41, 0.80) 100%) !important;
+  backdrop-filter: blur(20px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow: 
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.45),
+    0 4px 20px -2px rgba(250, 45, 72, 0.45) !important;
+  will-change: transform;
+}
+
+/* iOS 26 Liquid Glass Active Tab Pill (Mobile Nav) */
+.liquid-glass-tab-pill {
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    rgba(255, 255, 255, 0.08) 48%,
+    rgba(255, 255, 255, 0.18) 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.42) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.92) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.32) !important;
+  box-shadow:
+    inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1.5px 2px 0 rgba(255, 255, 255, 0.38),
+    inset 0 0 14px 0 rgba(255, 255, 255, 0.12),
+    0 4px 16px -2px rgba(0, 0, 0, 0.28) !important;
+}
+
+/* Remove default browser focus rings on navigation buttons */
+button:focus,
+button:focus-visible {
+  outline: none !important;
 }
 
 /* Bottom Fade Scrim (Subtle ambient fade that lets feed colors shine through) */
@@ -228,8 +195,6 @@ body {
   height: 120px;
   pointer-events: none;
   z-index: 25;
-  transform: translate3d(0, 0, 0);
-  -webkit-transform: translate3d(0, 0, 0);
   background: linear-gradient(to top, rgba(0, 0, 0, 0.20) 0%, rgba(0, 0, 0, 0.05) 50%, transparent 100%);
 }
 
@@ -242,10 +207,6 @@ body {
   height: 108px;
   pointer-events: none;
   z-index: 20;
-  transform: translate3d(0, 0, 0);
-  -webkit-transform: translate3d(0, 0, 0);
-  will-change: transform;
-  contain: paint;
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   mask-image: linear-gradient(
@@ -274,14 +235,10 @@ body {
   height: 108px;
   pointer-events: none;
   z-index: 21;
-  transform: translate3d(0, 0, 0);
-  -webkit-transform: translate3d(0, 0, 0);
-  will-change: transform;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.35) 0%,
-    rgba(0, 0, 0, 0.18) 42%,
-    rgba(0, 0, 0, 0.04) 75%,
+    rgba(0, 0, 0, 0.08) 0%,
+    rgba(0, 0, 0, 0.03) 45%,
     transparent 100%
   );
 }

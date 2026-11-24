@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, User, ChevronRight, Keyboard, Moon } from 'lucide-react';
+import { X, User, ChevronRight, Keyboard, Moon, Settings, Check, Sparkles, Volume2 } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlayerStore } from '../../stores/playerStore';
@@ -30,45 +30,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { isSignedIn, account } = useAuthStore();
   const { sleepTimerEndTime, sleepTimerEndOfTrack, sleepTimerRemainingSeconds } = usePlayerStore();
   const {
-    themeMode,
-    setThemeMode,
     accentColor,
     setAccentColor,
     crossfadeSeconds,
     setCrossfadeSeconds,
-    liquidGlass,
-    setLiquidGlass,
-    syncedLyrics,
-    setSyncedLyrics,
     audioQuality,
     setAudioQuality,
-    moduleIndexUrl,
-    setModuleIndexUrl,
   } = useSettingsStore();
 
   if (!isOpen) return null;
 
+  const crossfadePercent = (crossfadeSeconds / 12) * 100;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl">
-      <div className="w-full max-w-lg liquid-glass rounded-3xl p-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto scrollbar-none backdrop-blur-3xl border border-white/15">
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-          <h3 className="text-xl font-bold text-white">Settings</h3>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-white/60">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg liquid-glass rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col gap-5 max-h-[85vh] overflow-y-auto scrollbar-none backdrop-blur-3xl border border-white/15"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-accent-red/15 border border-accent-red/30 flex items-center justify-center">
+              <Settings className="w-4 h-4 text-accent-red" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-white leading-tight">Settings</h3>
+              <p className="text-[11px] text-white/45">Account, audio & personalization</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors cursor-pointer"
+            aria-label="Close Settings"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Account & Integrations Card (faithful to SettingsSheet.kt AccountCard) */}
+        {/* Account Section */}
         <section className="flex flex-col gap-2">
-          <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider">Account & Integrations</h4>
+          <h4 className="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Account</h4>
           <button
             onClick={() => {
               onClose();
               onOpenAccount?.();
             }}
-            className="flex items-center justify-between p-3.5 rounded-2xl liquid-glass border border-white/10 hover:border-white/25 transition-all text-left group cursor-pointer"
+            className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-white/[0.08] transition-all text-left group cursor-pointer"
           >
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0">
               {isSignedIn && account?.thumbnailUrl ? (
                 <img
                   src={account.thumbnailUrl}
@@ -80,155 +93,92 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <User className="w-5 h-5" />
                 </div>
               )}
-              <div>
-                <p className="text-sm font-bold text-white group-hover:text-accent-red transition-colors">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white group-hover:text-accent-red transition-colors truncate">
                   {isSignedIn && account ? account.name : 'Not signed in'}
                 </p>
-                <p className="text-xs text-white/50">
+                <p className="text-xs text-white/50 truncate">
                   {isSignedIn && account ? account.email || 'YouTube Music Account' : 'Tap to sign in with YouTube Music'}
                 </p>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-white/40 group-hover:text-white transition-colors" />
+            <ChevronRight className="w-5 h-5 text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
         </section>
 
-        {/* Appearance Section */}
-        <section className="flex flex-col gap-3">
-          <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider">Appearance</h4>
-          
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.03]">
-            <span className="text-sm font-medium text-white">Theme Mode</span>
-            <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
-              <button
-                onClick={() => setThemeMode('DARK')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium ${
-                  themeMode === 'DARK' ? 'bg-white/20 text-white' : 'text-white/50'
-                }`}
-              >
-                Dark
-              </button>
-              <button
-                onClick={() => setThemeMode('LIGHT')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium ${
-                  themeMode === 'LIGHT' ? 'bg-white/20 text-white' : 'text-white/50'
-                }`}
-              >
-                Light
-              </button>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-white/[0.03] flex flex-col gap-2">
-            <span className="text-sm font-medium text-white">Accent Color</span>
-            <div className="flex gap-3 pt-1">
-              {ACCENT_PRESETS.map((p) => (
-                <button
-                  key={p.color}
-                  onClick={() => setAccentColor(p.color)}
-                  className={`w-7 h-7 rounded-full transition-transform ${
-                    accentColor === p.color ? 'scale-125 ring-2 ring-white' : 'hover:scale-110'
-                  }`}
-                  style={{ backgroundColor: p.color }}
-                  title={p.name}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.03]">
-            <div>
-              <p className="text-sm font-medium text-white">Frosted Liquid Glass</p>
-              <p className="text-xs text-white/40">Smooth acrylic blurs and reflections</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={liquidGlass}
-              onChange={(e) => setLiquidGlass(e.target.checked)}
-              className="w-5 h-5 accent-accent-red cursor-pointer"
-            />
-          </div>
-        </section>
-
         {/* Playback & Audio Section */}
-        <section className="flex flex-col gap-3">
-          <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider">Playback & Audio</h4>
+        <section className="flex flex-col gap-2.5">
+          <h4 className="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Playback & Audio</h4>
 
-          <div className="p-3 rounded-2xl bg-white/[0.03] flex flex-col gap-2">
-            <div className="flex justify-between text-sm font-medium text-white">
-              <span>Gapless Crossfade</span>
-              <span className="font-mono text-accent-red">{crossfadeSeconds}s</span>
+          {/* Song Blending / Crossfade */}
+          <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent-red" />
+                <span className="text-sm font-semibold text-white">Song Blending (Crossfade)</span>
+              </div>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-accent-red/15 text-accent-red border border-accent-red/25">
+                {crossfadeSeconds === 0 ? 'Off' : `${crossfadeSeconds}s`}
+              </span>
             </div>
             <input
               type="range"
               min={0}
               max={12}
+              step={1}
               value={crossfadeSeconds}
               onChange={(e) => setCrossfadeSeconds(parseInt(e.target.value, 10))}
-              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-red"
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent-red [&::-webkit-slider-thumb]:shadow-md"
+              style={{
+                background: `linear-gradient(to right, ${accentColor} ${crossfadePercent}%, rgba(255,255,255,0.14) ${crossfadePercent}%)`,
+              }}
             />
+            <p className="text-[11px] text-white/45">
+              {crossfadeSeconds === 0
+                ? 'Tracks play to the end without overlapping'
+                : `Smoothly fades out the ending track over ${crossfadeSeconds}s into the next song`}
+            </p>
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.03]">
-            <div>
-              <p className="text-sm font-medium text-white">Synchronized Karaoke Lyrics</p>
-              <p className="text-xs text-white/40">Real-time word and line synchronization</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={syncedLyrics}
-              onChange={(e) => setSyncedLyrics(e.target.checked)}
-              className="w-5 h-5 accent-accent-red cursor-pointer"
-            />
-          </div>
-
-          <div className="p-3 rounded-2xl bg-white/[0.03] flex flex-col gap-3">
-            <div className="flex justify-between items-center">
+          {/* Audio Quality */}
+          <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-white/70" />
               <div>
-                <p className="text-sm font-medium text-white">Audio Quality</p>
-                <p className="text-xs text-white/40">
+                <p className="text-sm font-semibold text-white">Audio Quality</p>
+                <p className="text-[11px] text-white/45">
                   {audioQuality === 'LOSSLESS'
-                    ? 'Best quality — 320kbps AAC CDN, YouTube Opus 160k fallback'
+                    ? 'Best quality — 320kbps AAC CDN with YouTube Opus fallback'
                     : audioQuality === 'HIGH'
                     ? 'High quality — 320kbps AAC when available'
-                    : 'Data saver — YouTube stream only (128k)'}
+                    : 'Standard — YouTube stream only (data saver)'}
                 </p>
               </div>
             </div>
-            <div className="flex gap-1.5 bg-white/[0.06] p-1 rounded-xl">
-              <button
-                onClick={() => setAudioQuality('LOSSLESS')}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  audioQuality === 'LOSSLESS'
-                    ? 'bg-accent-red/20 text-accent-red border border-accent-red/30 shadow-sm'
-                    : 'text-white/50 hover:text-white/70'
-                }`}
-              >
-                Lossless
-              </button>
-              <button
-                onClick={() => setAudioQuality('HIGH')}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  audioQuality === 'HIGH'
-                    ? 'bg-accent-red/20 text-accent-red border border-accent-red/30 shadow-sm'
-                    : 'text-white/50 hover:text-white/70'
-                }`}
-              >
-                High
-              </button>
-              <button
-                onClick={() => setAudioQuality('LOW')}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  audioQuality === 'LOW'
-                    ? 'bg-accent-red/20 text-accent-red border border-accent-red/30 shadow-sm'
-                    : 'text-white/50 hover:text-white/70'
-                }`}
-              >
-                Standard
-              </button>
+            <div className="flex gap-1.5 bg-white/[0.06] p-1 rounded-xl border border-white/[0.06]">
+              {(
+                [
+                  { id: 'LOSSLESS', label: 'Lossless' },
+                  { id: 'HIGH', label: 'High' },
+                  { id: 'LOW', label: 'Standard' },
+                ] as const
+              ).map((q) => (
+                <button
+                  key={q.id}
+                  onClick={() => setAudioQuality(q.id)}
+                  className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    audioQuality === q.id
+                      ? 'bg-accent-red/20 text-accent-red border border-accent-red/35 shadow-sm'
+                      : 'text-white/55 hover:text-white/80'
+                  }`}
+                >
+                  {q.label}
+                </button>
+              ))}
             </div>
           </div>
 
+          {/* Sleep Timer */}
           {onOpenSleepTimer && (
             <button
               onClick={() => {
@@ -238,7 +188,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-white/[0.08] transition-all cursor-pointer group text-left"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-accent-red/15 border border-accent-red/30 flex items-center justify-center text-accent-red">
+                <div className="w-9 h-9 rounded-xl bg-accent-red/15 border border-accent-red/30 flex items-center justify-center text-accent-red shrink-0">
                   <Moon className="w-4 h-4 fill-accent-red/30" />
                 </div>
                 <div>
@@ -249,67 +199,83 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {sleepTimerEndOfTrack
                       ? 'Stopping at end of current track'
                       : sleepTimerEndTime
-                      ? `Active: ${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)} minutes left`
-                      : 'Automatically stop playback'}
+                      ? `Active: ${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`
+                      : 'Automatically pause playback'}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
                     Active
                   </span>
                 )}
-                <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white transition-colors" />
+                <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
               </div>
             </button>
           )}
         </section>
 
-        {/* Desktop Controls & Shortcuts */}
+        {/* Appearance Section */}
+        <section className="flex flex-col gap-2">
+          <h4 className="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Appearance</h4>
+          <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-between gap-4">
+            <div>
+              <span className="text-sm font-semibold text-white block">Accent Color</span>
+              <span className="text-[11px] text-white/45">
+                {ACCENT_PRESETS.find((p) => p.color === accentColor)?.name || 'Custom'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              {ACCENT_PRESETS.map((p) => {
+                const isSelected = accentColor === p.color;
+                return (
+                  <button
+                    key={p.color}
+                    onClick={() => setAccentColor(p.color)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform cursor-pointer ${
+                      isSelected ? 'scale-115 ring-2 ring-white ring-offset-2 ring-offset-black/40' : 'hover:scale-110 opacity-85 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: p.color }}
+                    title={p.name}
+                    aria-label={p.name}
+                  >
+                    {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Keyboard Controls */}
         {onOpenShortcuts && (
           <section className="flex flex-col gap-2">
-            <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider">Keyboard & Desktop Controls</h4>
+            <h4 className="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Controls</h4>
             <button
               onClick={() => {
                 onClose();
                 onOpenShortcuts();
               }}
-              className="flex items-center justify-between p-3.5 rounded-2xl liquid-glass border border-white/10 hover:border-white/25 transition-all text-left group cursor-pointer"
+              className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-white/[0.08] transition-all text-left group cursor-pointer"
             >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-2xl liquid-glass-circle flex items-center justify-center text-white/80 border border-white/15 shrink-0 group-hover:scale-105 transition-transform">
-                  <Keyboard className="w-5 h-5" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white/80 shrink-0 group-hover:scale-105 transition-transform">
+                  <Keyboard className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white group-hover:text-accent-red transition-colors">
+                  <p className="text-sm font-semibold text-white group-hover:text-accent-red transition-colors">
                     Keyboard Shortcuts
                   </p>
                   <p className="text-xs text-white/50">
-                    Spacebar (play/pause), arrow keys (seek 10s, volume) & hotkeys
+                    Spacebar, arrow keys & playback hotkeys
                   </p>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+              <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
             </button>
           </section>
         )}
-
-        {/* Sourcing & Modules Section */}
-        <section className="flex flex-col gap-3">
-          <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider">Custom Sourcing Modules</h4>
-
-          <div className="p-3 rounded-2xl bg-white/[0.03] flex flex-col gap-2">
-            <label className="text-xs text-white/60">Module Index URL (Qobuz & TIDAL Index)</label>
-            <input
-              type="text"
-              value={moduleIndexUrl}
-              onChange={(e) => setModuleIndexUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-accent-red"
-            />
-          </div>
-        </section>
       </div>
     </div>
   );

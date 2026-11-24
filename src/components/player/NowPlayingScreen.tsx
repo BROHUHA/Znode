@@ -22,7 +22,7 @@ import {
   Loader2,
   Shuffle,
   Trash2,
-  ChevronUp,
+  GripVertical,
   ChevronDown,
   Play,
   Plus,
@@ -150,6 +150,8 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   const [scrubTime, setScrubTime] = useState<number | null>(null);
   const scrubberBarRef = useRef<HTMLDivElement>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [downloadedSongs, setDownloadedSongs] = useState<Set<string>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'IDLE' | 'DOWNLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
@@ -611,6 +613,13 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
       setDownloadedSongs(nextSet);
       localStorage.setItem(DOWNLOADS_KEY, JSON.stringify(Array.from(nextSet)));
 
+      try {
+        const metaRaw = localStorage.getItem('znode_downloaded_songs_meta');
+        const metaList: any[] = metaRaw ? JSON.parse(metaRaw) : [];
+        const filtered = metaList.filter((s) => s.videoId !== currentSong.videoId);
+        localStorage.setItem('znode_downloaded_songs_meta', JSON.stringify([currentSong, ...filtered]));
+      } catch {}
+
       setDownloadStatus('SUCCESS');
       setTimeout(() => setDownloadStatus('IDLE'), 2500);
     } catch (err) {
@@ -933,8 +942,11 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
 
         {/* View Switcher: PLAYER vs LYRICS vs QUEUE */}
         {(nowPlayingTab === 'PLAYER' || isDocked) && (
-          <div className="flex-1 flex flex-col justify-end pb-2">
-            {/* Track Info Row + Liquid Glass Action Buttons */}
+          <>
+            {/* Spacer over upper hero artwork so details & controls start from the middle */}
+            <div className="flex-1 min-h-[24vh]" />
+            <div className="flex flex-col shrink-0 mb-3 sm:mb-4">
+              {/* Track Info Row + Liquid Glass Action Buttons */}
             <div className="w-full flex items-center justify-between mb-1.5">
               <div className="overflow-hidden pr-3 flex-1 min-w-0">
                 <h2 className="text-2xl sm:text-[28px] font-bold text-white truncate leading-tight tracking-tight drop-shadow-sm">
@@ -980,6 +992,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               </button>
             </div>
           </div>
+          </>
         )}
 
         {/* VIEW B: Real-Time Synchronized Lyrics View (Mobile full screen overlay only; on desktop, it displays in main screen) */}
@@ -1173,11 +1186,47 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                 <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-1.5 py-1" data-scrollable>
                   {queue.map((item, idx) => {
                     const isCurrent = idx === queueIndex;
+                    const isDragging = draggedIdx === idx;
+                    const isDragOver = dragOverIdx === idx && draggedIdx !== null && draggedIdx !== idx;
                     return (
                       <div
                         key={`${item.videoId}-${idx}`}
-                        className={`flex items-center justify-between p-2 rounded-2xl transition-all duration-200 group ${
-                          isCurrent
+                        data-np-queue-idx={idx}
+                        draggable={!isCurrent}
+                        onDragStart={(e) => {
+                          if (isCurrent) {
+                            e.preventDefault();
+                            return;
+                          }
+                          setDraggedIdx(idx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', String(idx));
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverIdx !== idx) {
+                            setDragOverIdx(idx);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedIdx !== null && draggedIdx !== idx) {
+                            moveQueueItem(draggedIdx, idx);
+                          }
+                          setDraggedIdx(null);
+                          setDragOverIdx(null);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedIdx(null);
+                          setDragOverIdx(null);
+                        }}
+                        className={`flex items-center justify-between p-2 rounded-2xl transition-all duration-150 group ${
+                          isDragging
+                            ? 'opacity-40 scale-[0.98] bg-white/10 border border-white/25'
+                            : isDragOver
+                            ? 'bg-white/[0.12] border border-accent-red/60 shadow-[0_0_14px_rgba(250,45,72,0.2)]'
+                            : isCurrent
                             ? 'bg-white/[0.14] border border-white/25 text-white font-semibold shadow-lg'
                             : 'hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] text-white/70'
                         }`}
@@ -1227,7 +1276,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                           </div>
                         </div>
 
-                        {/* Queue Arrange Controls */}
+                        {/* Drag Handle & Remove Controls */}
                         <div className="flex items-center gap-1 shrink-0 ml-2">
                           {isCurrent ? (
                             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-accent-red/25 text-accent-red border border-accent-red/40">
@@ -1235,22 +1284,31 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                             </span>
                           ) : (
                             <>
-                              <button
-                                onClick={() => moveQueueItem(idx, Math.max(0, idx - 1))}
-                                disabled={idx === 0}
-                                className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-white disabled:opacity-20 transition-all cursor-pointer"
-                                title="Move up in queue"
+                              <div
+                                onTouchStart={() => setDraggedIdx(idx)}
+                                onTouchMove={(e) => {
+                                  const touch = e.touches[0];
+                                  if (!touch) return;
+                                  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                                  const row = el?.closest('[data-np-queue-idx]');
+                                  const targetIdx = row ? parseInt(row.getAttribute('data-np-queue-idx') || '', 10) : NaN;
+                                  if (!isNaN(targetIdx)) {
+                                    setDragOverIdx(targetIdx);
+                                  }
+                                }}
+                                onTouchEnd={() => {
+                                  if (draggedIdx !== null && dragOverIdx !== null && draggedIdx !== dragOverIdx) {
+                                    moveQueueItem(draggedIdx, dragOverIdx);
+                                  }
+                                  setDraggedIdx(null);
+                                  setDragOverIdx(null);
+                                }}
+                                className="p-1.5 rounded-lg text-white/35 hover:text-white/80 hover:bg-white/10 cursor-grab active:cursor-grabbing touch-none transition-colors"
+                                title="Drag to reorder"
+                                aria-label="Drag to reorder"
                               >
-                                <ChevronUp className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => moveQueueItem(idx, Math.min(queue.length - 1, idx + 1))}
-                                disabled={idx === queue.length - 1}
-                                className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-white disabled:opacity-20 transition-all cursor-pointer"
-                                title="Move down in queue"
-                              >
-                                <ChevronDown className="w-4 h-4" />
-                              </button>
+                                <GripVertical className="w-4 h-4" />
+                              </div>
                               <button
                                 onClick={() => removeFromQueue(idx)}
                                 className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-accent-red transition-all cursor-pointer"
@@ -1400,7 +1458,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         )}
 
         {/* 4. Scrubber Bar with Played & Remaining Time — Apple Music style with glowing thumb knob */}
-        <div className="w-full pt-1.5 pb-1 select-none">
+        <div className="w-full pt-2 pb-2 select-none">
           {/* Expanded touch target wrapper */}
           <div
             ref={scrubberBarRef}
@@ -1432,7 +1490,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         </div>
 
         {/* 5. Main Playback Transport Controls — Modern double-triangle rewind & fast-forward glyphs matching reference */}
-        <div className="flex items-center justify-center w-full py-1 gap-12 sm:gap-16">
+        <div className="flex items-center justify-center w-full py-2.5 sm:py-3 gap-12 sm:gap-16">
           {/* Previous Track — Double Triangle Pointing Left (Rewind ◀◀) */}
           <button
             onClick={prev}
@@ -1499,7 +1557,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         </div>
 
         {/* 6. Volume Slider Row */}
-        <div className="w-full flex items-center gap-3 px-1 py-1">
+        <div className="w-full flex items-center gap-3 px-1 py-2">
           <button
             onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
             className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
@@ -1534,7 +1592,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         </div>
 
         {/* 7. Bottom 4 Action Buttons — Liquid Glass iOS 26 (Apple Music reference) */}
-        <div className="flex items-center justify-between w-full px-4 pt-1.5 pb-1">
+        <div className="flex items-center justify-between w-full px-4 pt-2.5 pb-1.5">
           {/* Button 1: Lyrics Toggle — Speech bubble icon */}
           <button
             onClick={() => setNowPlayingTab(nowPlayingTab === 'LYRICS' ? 'PLAYER' : 'LYRICS')}
@@ -1650,38 +1708,42 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
       {showOptionsMenu && (
         <div
           onClick={() => setShowOptionsMenu(false)}
-          className="absolute inset-0 z-50 bg-black/60 backdrop-blur-md flex flex-col justify-end p-4 animate-in fade-in duration-200"
+          className="absolute inset-0 z-50 bg-black/45 backdrop-blur-2xl flex flex-col justify-end p-3.5 sm:p-4 animate-in fade-in duration-200"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm mx-auto liquid-glass rounded-3xl p-4 flex flex-col gap-2 border border-white/20 shadow-2xl"
+            className="w-full max-w-sm mx-auto rounded-3xl p-4 flex flex-col gap-2 bg-white/[0.08] backdrop-blur-3xl border border-white/20 shadow-[0_24px_80px_rgba(0,0,0,0.6)] max-h-[88vh] overflow-y-auto scrollbar-none"
           >
-            <div className="flex items-center gap-3 p-2 pb-3 border-b border-white/10">
+            {/* Subtle Sheet Handle */}
+            <div className="w-9 h-1 rounded-full bg-white/25 mx-auto mb-1 shrink-0" />
+
+            {/* Track Header */}
+            <div className="flex items-center gap-3 px-2 py-2 pb-3 border-b border-white/10">
               <img
                 src={artworkUrl}
                 alt={currentSong.title}
                 referrerPolicy="no-referrer"
                 onError={handleArtworkError}
-                className="w-12 h-12 rounded-xl object-cover border border-white/15"
+                className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-md shrink-0"
               />
-              <div className="overflow-hidden flex-1">
+              <div className="overflow-hidden flex-1 min-w-0">
                 <h4 className="text-sm font-bold text-white truncate">{currentSong.title}</h4>
-                <p className="text-xs text-white/50 truncate mt-0.5">{currentSong.artist}</p>
+                <p className="text-xs text-white/55 truncate mt-0.5">{currentSong.artist}</p>
               </div>
             </div>
 
             {/* Dynamic Audio Quality Selector */}
-            <div className="p-3 my-1 rounded-2xl bg-white/[0.06] border border-white/10 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-white/80 px-1">
+            <div className="p-3 rounded-2xl bg-white/[0.05] border border-white/10 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-white/85 px-0.5">
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-accent-red" />
                   <span>Audio Streaming Quality</span>
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white border border-white/10">
-                  {audioQuality === 'LOSSLESS' ? 'Lossless 320k' : audioQuality === 'HIGH' ? 'High 256k' : 'Normal 128k'}
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white/90 border border-white/10">
+                  {audioQuality === 'LOSSLESS' ? '320k AAC' : audioQuality === 'HIGH' ? '256k AAC' : '128k'}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1.5 mt-0.5">
+              <div className="grid grid-cols-3 gap-1.5 bg-black/20 p-1 rounded-xl border border-white/[0.06]">
                 {[
                   { id: 'LOSSLESS' as const, label: 'Lossless', sub: '320 kbps' },
                   { id: 'HIGH' as const, label: 'High', sub: '256 kbps' },
@@ -1692,10 +1754,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                     <button
                       key={q.id}
                       onClick={() => setAudioQuality(q.id)}
-                      className={`py-2 px-1.5 rounded-xl text-center transition-all cursor-pointer border ${
+                      className={`py-1.5 px-1.5 rounded-lg text-center transition-all cursor-pointer border ${
                         isActive
-                          ? 'bg-accent-red text-white border-accent-red shadow-[0_0_12px_rgba(250,45,72,0.4)] font-bold'
-                          : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border-white/10 text-xs font-medium'
+                          ? 'bg-accent-red/25 text-white border-accent-red/50 shadow-sm font-bold'
+                          : 'bg-transparent text-white/55 hover:text-white hover:bg-white/[0.06] border-transparent text-xs font-medium'
                       }`}
                     >
                       <div className="text-xs leading-tight">{q.label}</div>
@@ -1708,111 +1770,152 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               </div>
             </div>
 
-            {currentSong.albumId && onOpenDetail && (
-              <button
-                onClick={() => {
-                  setShowOptionsMenu(false);
-                  onOpenDetail(currentSong.albumId!, undefined, currentSong.albumName || 'Album');
-                }}
-                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
-              >
-                <Disc3 className="w-4 h-4 text-accent-red" />
-                <span>View Album ({currentSong.albumName || 'Album'})</span>
-              </button>
-            )}
+            {/* Action Menu Items */}
+            <div className="flex flex-col gap-1">
+              {currentSong.albumId && onOpenDetail && (
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    onOpenDetail(currentSong.albumId!, undefined, currentSong.albumName || 'Album');
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                      <Disc3 className="w-4 h-4 text-accent-red" />
+                    </div>
+                    <span className="truncate">View Album ({currentSong.albumName || 'Album'})</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+                </button>
+              )}
 
-            {currentSong.artistId && onOpenDetail && (
-              <button
-                onClick={() => {
-                  setShowOptionsMenu(false);
-                  onOpenDetail(currentSong.artistId!, undefined, currentSong.artist, undefined, null, 'ARTIST');
-                }}
-                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
-              >
-                <Music2 className="w-4 h-4 text-accent-red" />
-                <span>View Artist ({currentSong.artist})</span>
-              </button>
-            )}
+              {currentSong.artistId && onOpenDetail && (
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    onOpenDetail(currentSong.artistId!, undefined, currentSong.artist, undefined, null, 'ARTIST');
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                      <Music2 className="w-4 h-4 text-accent-red" />
+                    </div>
+                    <span className="truncate">View Artist ({currentSong.artist})</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+                </button>
+              )}
 
-            {onOpenSleepTimer && (
+              {onOpenSleepTimer && (
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    onOpenSleepTimer();
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                      <Moon className="w-4 h-4 text-accent-red" />
+                    </div>
+                    <span>Sleep Timer</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
+                        {sleepTimerEndOfTrack ? 'End of track' : `${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`}
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70" />
+                  </div>
+                </button>
+              )}
+
+              {onOpenEqualizer && (
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    onOpenEqualizer();
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                      <Sliders className="w-4 h-4 text-accent-red" />
+                    </div>
+                    <span>Equalizer & 2D Tone Pad</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+                </button>
+              )}
+
+              {onOpenListenTogether && (
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    onOpenListenTogether();
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                      <Users className="w-4 h-4 text-accent-red" />
+                    </div>
+                    <span>Listen Together (Jam Party)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+                </button>
+              )}
+
+              {onOpenSettings && (
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    onOpenSettings();
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                      <Settings className="w-4 h-4 text-accent-red" />
+                    </div>
+                    <span>Settings & Preferences</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   setShowOptionsMenu(false);
-                  onOpenSleepTimer();
+                  const shareUrl = `https://music.youtube.com/watch?v=${currentSong.videoId}`;
+                  if (navigator.share) {
+                    navigator.share({
+                      title: currentSong.title,
+                      text: `Listening to ${currentSong.title} by ${currentSong.artist} on Znode Music`,
+                      url: shareUrl,
+                    }).catch(() => {});
+                  } else if (navigator.clipboard) {
+                    navigator.clipboard.writeText(shareUrl).catch(() => {});
+                  }
                 }}
-                className="flex items-center justify-between p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
+                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
-                  <Moon className="w-4 h-4 text-accent-red" />
-                  <span>Sleep Timer</span>
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shrink-0">
+                    <Share2 className="w-4 h-4 text-accent-red" />
+                  </div>
+                  <span>Share Song</span>
                 </div>
-                {(sleepTimerEndTime || sleepTimerEndOfTrack) && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-red/20 text-accent-red border border-accent-red/30">
-                    {sleepTimerEndOfTrack ? 'End of track' : `${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`}
-                  </span>
-                )}
+                <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-white/70 shrink-0" />
               </button>
-            )}
-
-            {onOpenEqualizer && (
-              <button
-                onClick={() => {
-                  setShowOptionsMenu(false);
-                  onOpenEqualizer();
-                }}
-                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
-              >
-                <Sliders className="w-4 h-4 text-accent-red" />
-                <span>Equalizer & 2D Tone Pad</span>
-              </button>
-            )}
-
-            {onOpenListenTogether && (
-              <button
-                onClick={() => {
-                  setShowOptionsMenu(false);
-                  onOpenListenTogether();
-                }}
-                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
-              >
-                <Users className="w-4 h-4 text-accent-red" />
-                <span>Listen Together (Jam Party)</span>
-              </button>
-            )}
-
-            {onOpenSettings && (
-              <button
-                onClick={() => {
-                  setShowOptionsMenu(false);
-                  onOpenSettings();
-                }}
-                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
-              >
-                <Settings className="w-4 h-4 text-accent-red" />
-                <span>Settings & Preferences</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                setShowOptionsMenu(false);
-                if (navigator.share) {
-                  navigator.share({
-                    title: currentSong.title,
-                    text: `Listening to ${currentSong.title} by ${currentSong.artist} on Znode Music (ZN)`,
-                    url: window.location.href,
-                  });
-                }
-              }}
-              className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors text-left cursor-pointer"
-            >
-              <Share2 className="w-4 h-4 text-accent-red" />
-              <span>Share Song</span>
-            </button>
+            </div>
 
             <button
               onClick={() => setShowOptionsMenu(false)}
-              className="w-full py-2.5 mt-2 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs transition-colors cursor-pointer"
+              className="w-full py-2.5 mt-1 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-xs transition-colors cursor-pointer"
             >
               Close
             </button>

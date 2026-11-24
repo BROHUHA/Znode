@@ -53,6 +53,14 @@ function loadLocalPlaylists(): UserPlaylist[] {
   }
 }
 
+const loadLocalLikedSongs = (): Song[] => {
+  try {
+    const raw = localStorage.getItem('znode_local_liked_songs');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+};
+
 export const useAuthStore = create<AuthState>((set, get) => {
   const savedAccountJson = localStorage.getItem('yz_yt_account');
   const savedCookie = localStorage.getItem('yz_yt_cookie');
@@ -86,7 +94,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     error: null,
     library: null,
     userPlaylists: loadLocalPlaylists(),
-    likedSongs: [],
+    likedSongs: loadLocalLikedSongs(),
     feedRefreshTrigger: 0,
 
     lastfmEnabled: localStorage.getItem('yz_lastfm_enabled') === 'true',
@@ -355,6 +363,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
         : [song, ...likedSongs];
 
       set({ likedSongs: nextLiked });
+      try {
+        localStorage.setItem('znode_local_liked_songs', JSON.stringify(nextLiked));
+      } catch {}
 
       usePlayerStore.setState((s) => ({
         likeStatuses: {

@@ -19,6 +19,9 @@ const streamCache = new Map<string, string>();
 // Master playback timeout: auto-skips if nothing plays within this duration
 let playbackTimeoutHandle: any = null;
 
+// Monotonic request ID to prevent stale async playSong() calls from overwriting a newer song switch
+let currentPlayRequestId = 0;
+
 function clearPlaybackTimeout() {
   if (playbackTimeoutHandle) {
     clearTimeout(playbackTimeoutHandle);
@@ -74,22 +77,10 @@ async function prepareUpcomingSong(song: Song) {
 }
 
 function getNextTrack(state: PlayerState): Song | null {
-  const { queue, queueIndex, repeatMode, autoplay, currentSong } = state;
+  const { queue, queueIndex, repeatMode, currentSong } = state;
   if (repeatMode === 'ONE' && currentSong) return currentSong;
-  if (repeatMode === 'ALL') {
-    if (queueIndex + 1 < queue.length) return queue[queueIndex + 1];
-    return queue[0] || null;
-  }
-  if (autoplay) {
-    const nextManual = queue.slice(queueIndex + 1).find((s) => s.fromAutoplay === false);
-    if (nextManual && queue[queueIndex + 1]?.videoId === nextManual.videoId) {
-      return nextManual;
-    }
-    const nextAutoplay = queue.slice(queueIndex + 1).find((s) => s.fromAutoplay === true);
-    if (nextAutoplay) return nextAutoplay;
-    if (queueIndex + 1 < queue.length) return queue[queueIndex + 1];
-  }
   if (queueIndex + 1 < queue.length) return queue[queueIndex + 1];
+  if (repeatMode === 'ALL' && queue.length > 0) return queue[0];
   return null;
 }
 
@@ -121,7 +112,7 @@ interface PlayerState {
   sleepTimerRemainingSeconds: number | null;
 
   // Actions
-  playSong: (song: Song, newQueue?: Song[], isExplicitQueue?: boolean) => Promise<void>;
+  playSong: (song: Song, newQueue?: Song[], isExplicitQueue?: boolean, fromCrossfade?: boolean) => Promise<void>;
   setCurrentPalette: (palette: PaletteColors) => void;
   togglePlay: () => void;
   next: () => Promise<void>;
@@ -178,6 +169,21 @@ function getSavedVolume(): number {
   return 0.8;
 }
 
+function getInitialLikeStatuses(): Record<string, LikeStatus> {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('znode_local_liked_songs') : null;
+    if (raw) {
+      const list: Song[] = JSON.parse(raw);
+      const map: Record<string, LikeStatus> = {};
+      for (const s of list) {
+        if (s?.videoId) map[s.videoId] = 'LIKE';
+      }
+      return map;
+    }
+  } catch {}
+  return {};
+}
+
 export const usePlayerStore = create<PlayerState>((set, get) => {
   // Bind AudioEngine callbacks
   audioEngine.onTimeUpdate((currentTime, duration) => {
@@ -218,7 +224,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   audioEngine.onEnded(() => {
     clearPlaybackTimeout();
-    const { repeatMode, next, seek, sleepTimerEndOfTrack, cancelSleepTimer } = get();
+    const { repeatMode, seek, sleepTimerEndOfTrack, cancelSleepTimer } = get();
     if (sleepTimerEndOfTrack) {
       cancelSleepTimer();
       audioEngine.pause();
@@ -228,23 +234,89 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       seek(0);
       audioEngine.resume();
     } else if (!audioEngine.wasCrossfaded) {
-      next();
+      get().next();
     }
   });
 
   audioEngine.onCrossfade(() => {
-    const { repeatMode, next, sleepTimerEndOfTrack, cancelSleepTimer } = get();
+    const { repeatMode, seek, sleepTimerEndOfTrack, cancelSleepTimer } = get();
     if (sleepTimerEndOfTrack) {
       cancelSleepTimer();
       audioEngine.pause();
       return;
     }
-    if (repeatMode !== 'ONE') {
-      next();
+    if (repeatMode === 'ONE') {
+      seek(0);
+      audioEngine.resume();
+    } else {
+      advanceNext(true);
     }
   });
 
-  // Hardware Media Keys & OS Lockscreen Handlers
+  const advanceNext = async (fromCrossfade: boolean = false) => {
+    const { queue, queueIndex, playSong, repeatMode, autoplay, currentSong } = get();
+
+    // Mode 1: Repeat One Track
+    if (repeatMode === 'ONE' && currentSong) {
+      audioEngine.seek(0);
+      audioEngine.resume();
+      return;
+    }
+
+    // Mode 2: Queue Mode (repeatMode === 'ALL')
+    if (repeatMode === 'ALL') {
+      if (queueIndex + 1 < queue.length) {
+        await playSong(queue[queueIndex + 1], undefined, true, fromCrossfade);
+      } else if (queue.length > 0) {
+        await playSong(queue[0], undefined, true, fromCrossfade);
+      }
+      return;
+    }
+
+    // Mode 3 & 4: Play the next track in the ordered queue if available
+    if (queueIndex + 1 < queue.length) {
+      const nextTrack = queue[queueIndex + 1];
+
+      // Replenish autoplay recommendations in background when near end of queue
+      if (autoplay && queue.length - (queueIndex + 1) <= 3) {
+        const seedId = queue[queue.length - 1]?.videoId || nextTrack.videoId;
+        innertubeService
+          .getNext(seedId)
+          .then((more) => {
+            const currentIds = new Set(get().queue.map((s) => s.videoId));
+            const fresh = more
+              .filter((r) => !currentIds.has(r.videoId))
+              .map((r) => ({ ...r, fromAutoplay: true }));
+            if (fresh.length > 0) {
+              set((state) => ({ queue: [...state.queue, ...fresh] }));
+            }
+          })
+          .catch((e) => console.warn('Autoplay replenishment failed:', e));
+      }
+
+      await playSong(nextTrack, undefined, false, fromCrossfade);
+      return;
+    }
+
+    // End of queue: if autoplay is enabled, fetch fresh related songs
+    if (autoplay && currentSong) {
+      try {
+        const recommendations = await innertubeService.getNext(currentSong.videoId);
+        const currentIds = new Set(queue.map((s) => s.videoId));
+        const fresh = recommendations
+          .filter((r) => r.videoId !== currentSong.videoId && !currentIds.has(r.videoId))
+          .map((r) => ({ ...r, fromAutoplay: true }));
+
+        if (fresh.length > 0) {
+          set((state) => ({ queue: [...state.queue, ...fresh] }));
+          await playSong(fresh[0], undefined, false, fromCrossfade);
+          return;
+        }
+      } catch (e) {
+        console.warn('Next autoplay fetch failed:', e);
+      }
+    }
+  };
   if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
     try {
       navigator.mediaSession.setActionHandler('play', () => get().togglePlay());
@@ -274,7 +346,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     shuffle: false,
     autoplay: true,
     volume: getSavedVolume(),
-    likeStatuses: {},
+    likeStatuses: getInitialLikeStatuses(),
     isNowPlayingOpen: false,
     nowPlayingTab: 'PLAYER',
     queueSubTab: 'QUEUE',
@@ -300,7 +372,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
     },
 
-    playSong: async (song: Song, newQueue?: Song[], isExplicitQueue: boolean = false) => {
+    playSong: async (
+      song: Song,
+      newQueue?: Song[],
+      isExplicitQueue: boolean = false,
+      fromCrossfade: boolean = false
+    ) => {
+      const requestId = ++currentPlayRequestId;
+
+      if (!fromCrossfade) {
+        audioEngine.cancelCrossfade();
+      }
+
       // Ensure the playing song has a non-empty thumbnail URL
       const resolvedSong: Song = {
         ...song,
@@ -317,8 +400,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       let queueIndex = get().queueIndex;
       let stationSeedId = get().stationSeedId;
 
-      if (isQueueMode && newQueue && newQueue.length > 0) {
-        // In Queue Mode (or explicit playlist queue): retain and play through the given queue
+      if (newQueue && newQueue.length > 0) {
+        // Load provided queue (e.g. album, playlist, or explicit queue)
         queue = newQueue.map((s) => ({
           ...s,
           thumbnailUrl:
@@ -333,29 +416,37 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           queue.unshift(resolvedSong);
           queueIndex = 0;
         }
-        stationSeedId = null;
+        stationSeedId = isQueueMode ? null : resolvedSong.videoId;
       } else if (isQueueMode) {
         // In Queue Mode without newQueue: preserve existing queue
-        const existingIdx = queue.findIndex((s) => s.videoId === resolvedSong.videoId);
-        if (existingIdx !== -1) {
-          queueIndex = existingIdx;
+        if (queue[queueIndex + 1]?.videoId === resolvedSong.videoId) {
+          queueIndex = queueIndex + 1;
         } else {
-          queue = [resolvedSong, ...queue];
-          queueIndex = 0;
+          const existingIdx = queue.findIndex((s) => s.videoId === resolvedSong.videoId);
+          if (existingIdx !== -1) {
+            queueIndex = existingIdx;
+          } else {
+            queue = [resolvedSong, ...queue];
+            queueIndex = 0;
+          }
         }
       } else {
         // Default Autoplay Mode:
-        // Once a related queue is formed, do NOT refresh until it reaches end of queue or user refresh!
-        const existingIdx = queue.findIndex((s) => s.videoId === resolvedSong.videoId);
-        if (existingIdx !== -1 && queue.length > 1) {
-          // Song is already part of the existing formed queue: keep the queue intact!
-          queueIndex = existingIdx;
+        // Check immediate next item first to avoid jumping to an earlier duplicate
+        if (queue[queueIndex + 1]?.videoId === resolvedSong.videoId) {
+          queueIndex = queueIndex + 1;
         } else {
-          // Brand new song selected outside current queue: form a fresh related queue
-          const manualUpcoming = queue.slice(queueIndex + 1).filter((s) => s.fromAutoplay === false);
-          queue = [resolvedSong, ...manualUpcoming];
-          queueIndex = 0;
-          stationSeedId = resolvedSong.videoId;
+          const existingIdx = queue.findIndex((s) => s.videoId === resolvedSong.videoId);
+          if (existingIdx !== -1 && queue.length > 1) {
+            // Song is already part of the existing formed queue: keep the queue intact!
+            queueIndex = existingIdx;
+          } else {
+            // Brand new song selected outside current queue: form a fresh related queue
+            const manualUpcoming = queue.slice(queueIndex + 1).filter((s) => s.fromAutoplay === false);
+            queue = [resolvedSong, ...manualUpcoming];
+            queueIndex = 0;
+            stationSeedId = resolvedSong.videoId;
+          }
         }
       }
 
@@ -390,8 +481,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         listenTogetherService.sendTrack(song);
       }
 
-      // Stream Resolution Pipeline: check memory cache first for 0ms instant start
-      let streamUrl = streamCache.get(song.videoId);
+      // Stream Resolution Pipeline: check direct streamUrl (e.g. local files) or memory cache first
+      let streamUrl: string | undefined = (song as any).streamUrl || streamCache.get(song.videoId);
 
       if (!streamUrl) {
         try {
@@ -420,6 +511,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         }
       }
 
+      // Abort if a newer playSong() was triggered while resolving JioSaavn stream
+      if (requestId !== currentPlayRequestId) return;
+
       // Strictly enforce fixed user volume across track transitions
       audioEngine.setVolume(get().volume);
 
@@ -429,12 +523,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       // Playback: JioSaavn CDN stream via HTML5 audio (supports EQ/DSP), or YouTube IFrame fallback
       if (streamUrl && !streamUrl.includes('googlevideo.com')) {
         try {
-          await audioEngine.playUrl(streamUrl, 0, song.videoId);
+          await audioEngine.playUrl(streamUrl, 0, song.videoId, fromCrossfade);
         } catch (err) {
+          if (requestId !== currentPlayRequestId) return;
           console.warn('HTML5 direct playback failed, falling back to YouTube:', err);
           streamCache.delete(song.videoId);
           try {
-            await audioEngine.playVideo(song.videoId);
+            await audioEngine.playVideo(song.videoId, 0, fromCrossfade);
           } catch (err2) {
             console.error('YouTube fallback also failed for', song.title, err2);
           }
@@ -442,11 +537,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       } else {
         // No CDN stream found — play directly via YouTube IFrame player (always works)
         try {
-          await audioEngine.playVideo(song.videoId);
+          await audioEngine.playVideo(song.videoId, 0, fromCrossfade);
         } catch (err) {
           console.error('Failed to play video for', song.title, err);
         }
       }
+
+      if (requestId !== currentPlayRequestId) return;
 
       // Safety timeout: if isPlaying hasn't become true within 15s, auto-advance
       const playbackSongId = song.videoId;
@@ -514,89 +611,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     next: async () => {
-      const { queue, queueIndex, playSong, repeatMode, autoplay, currentSong } = get();
-
-      // Mode 1: Repeat One Track
-      if (repeatMode === 'ONE' && currentSong) {
-        audioEngine.seek(0);
-        audioEngine.resume();
-        return;
-      }
-
-      // Mode 2: Queue Mode (repeatMode === 'ALL')
-      // "play queue when we select queue mode"
-      if (repeatMode === 'ALL') {
-        if (queueIndex + 1 < queue.length) {
-          await playSong(queue[queueIndex + 1], undefined, true);
-        } else if (queue.length > 0) {
-          await playSong(queue[0], undefined, true);
-        }
-        return;
-      }
-
-      // Mode 3: Default Autoplay Mode (autoplay === true)
-      // "always play default releted autoplay songs insted of queue songs"
-      if (autoplay) {
-        // Priority 1: User explicitly added a manual track to queue (with '+'), play it!
-        const nextManualSong = queue.slice(queueIndex + 1).find((s) => s.fromAutoplay === false);
-        if (nextManualSong && queue[queueIndex + 1]?.videoId === nextManualSong.videoId) {
-          await playSong(nextManualSong);
-          return;
-        }
-
-        // Priority 2: Upcoming related autoplay track in queue
-        const nextAutoplay = queue.slice(queueIndex + 1).find((s) => s.fromAutoplay === true);
-        if (nextAutoplay) {
-          const remainingAutoplay = queue.slice(queueIndex + 1).filter((s) => s.fromAutoplay === true).length;
-          if (remainingAutoplay <= 3 && currentSong) {
-            innertubeService
-              .getNext(nextAutoplay.videoId)
-              .then((more) => {
-                const currentIds = new Set(get().queue.map((s) => s.videoId));
-                const fresh = more
-                  .filter((r) => !currentIds.has(r.videoId))
-                  .map((r) => ({ ...r, fromAutoplay: true }));
-                if (fresh.length > 0) {
-                  set((state) => ({ queue: [...state.queue, ...fresh] }));
-                }
-              })
-              .catch((e) => console.warn('Autoplay replenishment failed:', e));
-          }
-
-          await playSong(nextAutoplay);
-          return;
-        }
-
-        // Priority 3: No upcoming autoplay tracks remaining, fetch fresh related songs for currentSong
-        if (currentSong) {
-          try {
-            const recommendations = await innertubeService.getNext(currentSong.videoId);
-            const currentIds = new Set(queue.map((s) => s.videoId));
-            const fresh = recommendations
-              .filter((r) => r.videoId !== currentSong.videoId && !currentIds.has(r.videoId))
-              .map((r) => ({ ...r, fromAutoplay: true }));
-
-            if (fresh.length > 0) {
-              set((state) => ({ queue: [...state.queue, ...fresh] }));
-              await playSong(fresh[0]);
-              return;
-            }
-          } catch (e) {
-            console.warn('Next autoplay fetch failed:', e);
-          }
-        }
-
-        // Fallback: If any track remains in queue
-        if (queueIndex + 1 < queue.length) {
-          await playSong(queue[queueIndex + 1]);
-          return;
-        }
-      }
-
-      // Mode 4: Normal Playback (OFF)
-      if (queueIndex + 1 < queue.length) {
-        await playSong(queue[queueIndex + 1]);
-      }
+      await advanceNext(false);
     },
 
     prev: async () => {
@@ -665,6 +680,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set((state) => {
         const nextMode: RepeatMode =
           state.repeatMode === 'OFF' ? 'ALL' : state.repeatMode === 'ALL' ? 'ONE' : 'OFF';
+        audioEngine.setRepeatOne(nextMode === 'ONE');
         return { repeatMode: nextMode };
       });
     },
@@ -676,21 +692,26 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     cyclePlaybackMode: () => {
       const { autoplay, repeatMode } = get();
       if (autoplay && repeatMode === 'OFF') {
+        audioEngine.setRepeatOne(false);
         set({ autoplay: false, repeatMode: 'ALL' });
         return 'REPEAT_ALL';
       } else if (repeatMode === 'ALL') {
+        audioEngine.setRepeatOne(true);
         set({ autoplay: false, repeatMode: 'ONE' });
         return 'REPEAT_ONE';
       } else if (repeatMode === 'ONE') {
+        audioEngine.setRepeatOne(false);
         set({ autoplay: false, repeatMode: 'OFF' });
         return 'OFF';
       } else {
+        audioEngine.setRepeatOne(false);
         set({ autoplay: true, repeatMode: 'OFF' });
         return 'CONTINUE';
       }
     },
 
     setPlaybackMode: (mode: 'CONTINUE' | 'REPEAT_ALL' | 'REPEAT_ONE' | 'OFF') => {
+      audioEngine.setRepeatOne(mode === 'REPEAT_ONE');
       if (mode === 'CONTINUE') {
         set({ autoplay: true, repeatMode: 'OFF' });
       } else if (mode === 'REPEAT_ALL') {
@@ -803,6 +824,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set((state) => {
         const current = state.likeStatuses[videoId] || 'INDIFFERENT';
         const next: LikeStatus = current === 'LIKE' ? 'INDIFFERENT' : 'LIKE';
+
+        // Sync local liked songs list for Library -> Liked Music
+        try {
+          const songObj =
+            state.currentSong?.videoId === videoId
+              ? state.currentSong
+              : state.queue.find((s) => s.videoId === videoId);
+          const raw = localStorage.getItem('znode_local_liked_songs');
+          const list: Song[] = raw ? JSON.parse(raw) : [];
+          let updated: Song[];
+          if (next === 'LIKE') {
+            updated = songObj
+              ? [songObj, ...list.filter((s) => s.videoId !== videoId)]
+              : list;
+          } else {
+            updated = list.filter((s) => s.videoId !== videoId);
+          }
+          localStorage.setItem('znode_local_liked_songs', JSON.stringify(updated));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('znode_library_updated'));
+          }
+        } catch {}
 
         // Directly syncs with real YouTube Music Liked Songs (VLLM)
         innertubeService.rate(videoId, next).catch((e) => {

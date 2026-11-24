@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { YouTubeMusicLogo } from '../components/common/YouTubeMusicLogo';
+import { getLocalMusicSongs, subscribeLocalMusic } from '../utils/localMusic';
 
 interface LibraryViewProps {
   onOpenDetail?: (
@@ -44,6 +45,40 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenDetail, onOpenAc
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [expandedShelves, setExpandedShelves] = useState<Record<string, boolean>>({});
+  const [downloadsCount, setDownloadsCount] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('znode_downloaded_songs_meta');
+      return raw ? JSON.parse(raw).length : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [localMusicCount, setLocalMusicCount] = useState<number>(() => getLocalMusicSongs().length);
+  const [localLikedCount, setLocalLikedCount] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('znode_local_liked_songs');
+      return raw ? JSON.parse(raw).length : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  useEffect(() => {
+    const syncCounts = () => {
+      try {
+        const dRaw = localStorage.getItem('znode_downloaded_songs_meta');
+        setDownloadsCount(dRaw ? JSON.parse(dRaw).length : 0);
+        const lRaw = localStorage.getItem('znode_local_liked_songs');
+        setLocalLikedCount(lRaw ? JSON.parse(lRaw).length : 0);
+      } catch {}
+    };
+    const unsubLocal = subscribeLocalMusic(() => setLocalMusicCount(getLocalMusicSongs().length));
+    window.addEventListener('znode_library_updated', syncCounts);
+    return () => {
+      unsubLocal();
+      window.removeEventListener('znode_library_updated', syncCounts);
+    };
+  }, []);
 
   useEffect(() => {
     if (isSignedIn && !isSyncing && !library) {
@@ -154,7 +189,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenDetail, onOpenAc
               <h4 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors truncate">
                 Downloads
               </h4>
-              <p className="text-[11px] text-white/40 truncate">Downloaded songs</p>
+              <p className="text-[11px] text-white/40 truncate">
+                {downloadsCount > 0 ? `${downloadsCount} ${downloadsCount === 1 ? 'song' : 'songs'}` : 'Downloaded songs'}
+              </p>
             </div>
           </div>
 
@@ -172,7 +209,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenDetail, onOpenAc
               <h4 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors truncate">
                 Local music
               </h4>
-              <p className="text-[11px] text-white/40 truncate">Audio files on device</p>
+              <p className="text-[11px] text-white/40 truncate">
+                {localMusicCount > 0 ? `${localMusicCount} ${localMusicCount === 1 ? 'file' : 'files'}` : 'Import audio files'}
+              </p>
             </div>
           </div>
         </div>
@@ -256,7 +295,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenDetail, onOpenAc
                 Liked Music
               </h4>
               <p className="text-[10px] text-white/50 truncate mt-0.5">
-                {library?.likedSongs?.length || likedSongs.length || 0} songs
+                {library?.likedSongs?.length || likedSongs.length || localLikedCount} songs
               </p>
             </div>
           </div>
@@ -267,7 +306,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenDetail, onOpenAc
               key={pl.id}
               onClick={() => {
                 onOpenDetail?.(
-                  pl.id.startsWith('VL') ? pl.id : `VL${pl.id}`,
+                  pl.id.startsWith('VL') || pl.id.startsWith('UP_') ? pl.id : `VL${pl.id}`,
                   undefined,
                   pl.title,
                   `Playlist • ${pl.author}`,

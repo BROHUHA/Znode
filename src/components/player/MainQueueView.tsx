@@ -8,8 +8,7 @@ import {
   Repeat,
   Shuffle,
   Trash2,
-  ChevronUp,
-  ChevronDown,
+  GripVertical,
   X,
   RotateCw,
   Plus,
@@ -43,6 +42,8 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
   const [isLoadingRelated, setIsLoadingRelated] = useState(false);
   const [addedFeedback, setAddedFeedback] = useState<Record<string, boolean>>({});
   const [addedAllFeedback, setAddedAllFeedback] = useState(false);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!currentSong?.videoId) {
@@ -133,14 +134,14 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col relative px-4 sm:px-8 lg:px-12 pt-1 pb-16 overflow-hidden select-none">
+    <div className="flex flex-col w-full px-3 sm:px-6 pt-1 pb-6 select-none">
       {/* SUB-TAB 1: Up Next Queue */}
       {queueSubTab === 'QUEUE' && (
-        <div className="flex-1 flex flex-col overflow-hidden max-w-4xl mx-auto w-full">
-          {/* Controls Bar */}
-          <div className="flex items-center justify-between px-2 py-2 mb-2 text-xs text-white/60">
+        <div className="flex flex-col w-full">
+          {/* Controls Bar (scrolls naturally under AppShell's top-fade-blur like Listen Now) */}
+          <div className="flex items-center justify-between px-2 py-2.5 text-xs text-white/70">
             <div className="flex items-center gap-2.5">
-              <span className="text-xs font-medium">
+              <span className="text-xs font-semibold text-white/80">
                 {queue.length > 1 ? `${queue.length} songs in queue` : '1 song playing'}
               </span>
               <button
@@ -150,7 +151,7 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer active:scale-95 border ${
                   repeatMode === 'ALL'
                     ? 'bg-accent-red text-white border-accent-red shadow-sm'
-                    : 'bg-white/10 hover:bg-white/15 text-white/70 hover:text-white border-white/10'
+                    : 'bg-white/10 hover:bg-white/15 text-white/80 hover:text-white border-white/15'
                 }`}
               >
                 <Repeat className="w-3 h-3" />
@@ -162,7 +163,7 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
               {queue.length > 1 && (
                 <button
                   onClick={shuffleQueue}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-xs font-semibold transition-all cursor-pointer active:scale-95"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/85 hover:text-white text-xs font-semibold transition-all cursor-pointer active:scale-95 border border-white/10"
                 >
                   <Shuffle className="w-3.5 h-3.5" />
                   <span>Shuffle</span>
@@ -171,7 +172,7 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
               {queue.length > 1 && (
                 <button
                   onClick={clearQueue}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/60 hover:text-accent-red text-xs font-semibold transition-all cursor-pointer active:scale-95"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/70 hover:text-accent-red text-xs font-semibold transition-all cursor-pointer active:scale-95 border border-white/10"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Clear</span>
@@ -181,14 +182,50 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
           </div>
 
           {/* Queue Items List */}
-          <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-2 py-1" data-scrollable>
+          <div className="flex flex-col gap-1.5 py-1">
             {queue.map((item, idx) => {
               const isCurrent = idx === queueIndex;
+              const isDragging = draggedIdx === idx;
+              const isDragOver = dragOverIdx === idx && draggedIdx !== null && draggedIdx !== idx;
               return (
                 <div
                   key={`${item.videoId}-${idx}`}
-                  className={`flex items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all duration-200 group ${
-                    isCurrent
+                  data-queue-idx={idx}
+                  draggable={!isCurrent}
+                  onDragStart={(e) => {
+                    if (isCurrent) {
+                      e.preventDefault();
+                      return;
+                    }
+                    setDraggedIdx(idx);
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', String(idx));
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverIdx !== idx) {
+                      setDragOverIdx(idx);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedIdx !== null && draggedIdx !== idx) {
+                      moveQueueItem(draggedIdx, idx);
+                    }
+                    setDraggedIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  className={`flex items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all duration-150 group ${
+                    isDragging
+                      ? 'opacity-40 scale-[0.98] bg-white/10 border border-white/25'
+                      : isDragOver
+                      ? 'bg-white/[0.12] border border-accent-red/60 shadow-[0_0_16px_rgba(250,45,72,0.2)]'
+                      : isCurrent
                       ? 'bg-white/[0.14] border border-white/25 text-white font-semibold shadow-xl'
                       : 'hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] text-white/75'
                   }`}
@@ -244,30 +281,39 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
                     </div>
                   </div>
 
-                  {/* Reorder and Remove controls */}
-                  <div className="flex items-center gap-1 shrink-0 ml-3">
+                  {/* Drag Handle & Remove controls */}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-3">
                     {isCurrent ? (
                       <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-accent-red/25 text-accent-red border border-accent-red/40">
                         Playing
                       </span>
                     ) : (
                       <>
-                        <button
-                          onClick={() => moveQueueItem(idx, Math.max(0, idx - 1))}
-                          disabled={idx === 0}
-                          className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-white disabled:opacity-20 transition-all cursor-pointer"
-                          title="Move Up"
+                        <div
+                          onTouchStart={() => setDraggedIdx(idx)}
+                          onTouchMove={(e) => {
+                            const touch = e.touches[0];
+                            if (!touch) return;
+                            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                            const row = el?.closest('[data-queue-idx]');
+                            const targetIdx = row ? parseInt(row.getAttribute('data-queue-idx') || '', 10) : NaN;
+                            if (!isNaN(targetIdx)) {
+                              setDragOverIdx(targetIdx);
+                            }
+                          }}
+                          onTouchEnd={() => {
+                            if (draggedIdx !== null && dragOverIdx !== null && draggedIdx !== dragOverIdx) {
+                              moveQueueItem(draggedIdx, dragOverIdx);
+                            }
+                            setDraggedIdx(null);
+                            setDragOverIdx(null);
+                          }}
+                          className="p-1.5 rounded-lg text-white/35 hover:text-white/80 hover:bg-white/10 cursor-grab active:cursor-grabbing touch-none transition-colors"
+                          title="Drag to reorder"
+                          aria-label="Drag to reorder"
                         >
-                          <ChevronUp className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => moveQueueItem(idx, Math.min(queue.length - 1, idx + 1))}
-                          disabled={idx === queue.length - 1}
-                          className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-white disabled:opacity-20 transition-all cursor-pointer"
-                          title="Move Down"
-                        >
-                          <ChevronDown className="w-4 h-4" />
-                        </button>
+                          <GripVertical className="w-4 h-4" />
+                        </div>
                         <button
                           onClick={() => removeFromQueue(idx)}
                           className="p-1.5 rounded-lg hover:bg-white/15 text-white/40 hover:text-accent-red transition-all cursor-pointer"
@@ -287,8 +333,8 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
 
       {/* SUB-TAB 2: Related Tracks */}
       {queueSubTab === 'RELATED' && (
-        <div className="flex-1 flex flex-col overflow-hidden max-w-4xl mx-auto w-full">
-          <div className="flex items-center justify-between px-2 py-2 mb-2 text-xs text-white/60">
+        <div className="flex flex-col w-full">
+          <div className="flex items-center justify-between px-2 py-2.5 text-xs text-white/70">
             <span className="truncate">
               Recommended songs based on <strong className="text-white">{currentSong.title}</strong>
             </span>
@@ -296,7 +342,7 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
               <button
                 onClick={handleRefreshRelated}
                 disabled={isLoadingRelated}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 border border-white/10"
               >
                 <RotateCw className={`w-3.5 h-3.5 ${isLoadingRelated ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
@@ -304,7 +350,7 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
               {relatedSongs.length > 0 && (
                 <button
                   onClick={handleAddAllRelated}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                     addedAllFeedback
                       ? 'bg-green-500/30 text-green-300 border border-green-500/50'
                       : 'bg-accent-red hover:bg-accent-red/90 text-white shadow-md'
@@ -316,7 +362,7 @@ export const MainQueueView: React.FC<MainQueueViewProps> = () => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-2 py-1" data-scrollable>
+          <div className="flex flex-col gap-1.5 py-1">
             {relatedSongs.map((song) => {
               const isAdded = addedFeedback[song.videoId];
               return (

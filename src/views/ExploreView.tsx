@@ -38,7 +38,7 @@ function cleanArtistFromSubtitle(subtitle: string): string {
   return artist || subtitle;
 }
 
-export const ExploreView: React.FC<ExploreViewProps> = ({ onOpenDetail }) => {
+export const ExploreView: React.FC<ExploreViewProps> = React.memo(({ onOpenDetail }) => {
   const [shelves, setShelves] = useState<HomeShelf[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('All');
@@ -237,19 +237,8 @@ export const ExploreView: React.FC<ExploreViewProps> = ({ onOpenDetail }) => {
   }
 
   return (
-    <div className="p-4 sm:p-6 pb-28 md:pb-8 flex flex-col gap-8 max-w-7xl mx-auto w-full">
-      {/* 1. Discovery Subtitle & Badge */}
-      <div className="flex items-center gap-2.5 -mt-1 sm:-mt-2 mb-1">
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-accent-red/20 text-accent-red border border-accent-red/30 uppercase tracking-wider shrink-0">
-          <Sparkles className="w-3 h-3" />
-          Discovery
-        </span>
-        <p className="text-xs sm:text-sm text-white/50">
-          Discover top charts, trending tracks, new albums, and global genres
-        </p>
-      </div>
-
-      {/* 2. Top Interactive Quick Navigation Pills (Instant Filtering + Deep Browse) */}
+    <div className="p-4 sm:p-6 pb-28 md:pb-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+      {/* Top Interactive Quick Navigation Pills (Instant Filtering + Deep Browse) */}
       <div
         className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none snap-x -mx-4 px-4 sm:mx-0 sm:px-0"
         style={{
@@ -700,4 +689,4 @@ export const ExploreView: React.FC<ExploreViewProps> = ({ onOpenDetail }) => {
       )}
     </div>
   );
-};
+});

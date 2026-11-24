@@ -90,7 +90,6 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
 
   const {
     playSong,
-    currentPalette,
     sleepTimerEndTime,
     sleepTimerEndOfTrack,
     sleepTimerRemainingSeconds,
@@ -322,12 +321,7 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
             {isSuggesting && (
               <div
                 ref={searchDropdownRef}
-                className="absolute top-full left-0 right-0 mt-2 rounded-2xl shadow-[0_24px_50px_rgba(0,0,0,0.8)] z-50 overflow-hidden backdrop-blur-3xl border border-white/15 max-h-[420px] overflow-y-auto animate-fadeIn"
-                style={{
-                  background: currentPalette
-                    ? `linear-gradient(145deg, ${currentPalette.darkBase}fa 0%, ${currentPalette.darkBase}ee 100%)`
-                    : 'rgba(18, 21, 29, 0.96)',
-                }}
+                className="!absolute top-full left-0 right-0 mt-2 rounded-2xl liquid-glass z-50 max-h-[min(380px,calc(100vh-220px))] overflow-y-auto scrollbar-none animate-fadeIn"
               >
                 {/* Suggestions List */}
                 <div className="flex flex-col py-1">
@@ -533,13 +527,10 @@ export const FrostedTopBar: React.FC<FrostedTopBarProps> = ({
             <YouTubeMusicLogo size={22} className="opacity-95 drop-shadow-[0_1px_4px_rgba(255,255,255,0.4)] group-hover:scale-105 transition-transform" />
           </button>
 
-          {/* Frosted Dropdown Menu (Right aligned) */}
+          {/* Frosted Liquid Glass Dropdown Menu (Right aligned) */}
           {isMenuOpen && (
             <div
-              className="absolute right-0 top-full mt-2 w-56 p-1.5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/15 backdrop-blur-3xl z-50 flex flex-col gap-0.5 animate-scale-in"
-              style={{
-                background: 'rgba(20, 20, 26, 0.95)',
-              }}
+              className="!absolute right-0 top-full mt-2 w-56 p-1.5 rounded-2xl liquid-glass z-50 flex flex-col gap-0.5 animate-scale-in"
             >
               <button
                 onClick={() => {

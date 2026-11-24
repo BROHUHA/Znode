@@ -96,30 +96,28 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
   return (
     <aside
-      className={`hidden md:flex flex-col h-full liquid-glass-sidebar shrink-0 select-none relative z-20 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-        isCollapsed ? 'w-[74px] p-3' : 'w-64 p-5'
+      className={`hidden md:flex flex-col h-full liquid-glass-sidebar shrink-0 select-none relative z-20 p-3.5 overflow-hidden transition-[width] duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        isCollapsed ? 'w-[76px]' : 'w-64'
       }`}
     >
-      {/* Brand Header: Logo click expands & shrinks the sidebar smoothly (no unmount) */}
-      <div className="mb-6 flex justify-center">
+      {/* Brand Header: Logo click expands & shrinks the sidebar smoothly without icon jump */}
+      <div className="mb-5">
         <button
           onClick={toggleCollapse}
-          className={`flex items-center cursor-pointer min-w-0 group rounded-2xl transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.06] active:scale-[0.97] ${
-            isCollapsed
-              ? 'w-12 h-12 justify-center p-0 mx-auto'
-              : 'w-full p-2 gap-3 justify-start -ml-1'
-          }`}
+          className="w-full h-12 flex items-center justify-start cursor-pointer min-w-0 group rounded-2xl overflow-hidden transition-colors duration-200 hover:bg-white/[0.06] active:scale-[0.97]"
           title={isCollapsed ? 'Click to expand sidebar' : 'Click to shrink sidebar'}
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <div className="transition-transform duration-300 group-hover:scale-110 shrink-0 shadow-lg rounded-full">
-            <YouTubeMusicLogo size={34} />
+          <div className="w-12 h-12 flex items-center justify-center shrink-0">
+            <div className="transition-transform duration-300 group-hover:scale-110 shadow-lg rounded-full">
+              <YouTubeMusicLogo size={34} />
+            </div>
           </div>
           <div
-            className={`min-w-0 flex-1 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] text-left ${
+            className={`min-w-0 flex-1 pr-3 text-left transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
               isCollapsed
-                ? 'max-w-0 opacity-0 -translate-x-3 pointer-events-none'
-                : 'max-w-[200px] opacity-100 translate-x-0'
+                ? 'opacity-0 -translate-x-2 pointer-events-none'
+                : 'opacity-100 translate-x-0'
             }`}
           >
             <div className="flex items-center gap-1.5 min-w-0">
@@ -139,19 +137,14 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
       {/* Navigation Links with Optimized Gliding Selection Animation */}
       <nav className="flex flex-col gap-1.5 flex-1 relative overflow-y-auto overflow-x-hidden scrollbar-none">
-        {/* Animated Floating Active Indicator Pill */}
+        {/* Animated Gliding Active Indicator Pill (stretches/shrinks smoothly with sidebar width) */}
         <div
-          className={`absolute rounded-2xl pointer-events-none z-0 transition-all duration-320 ease-[cubic-bezier(0.34,1.35,0.64,1)] ${
-            isCollapsed
-              ? 'w-12 h-12 left-0 right-0 mx-auto'
-              : 'left-0 right-0 h-12'
-          }`}
+          aria-hidden="true"
+          className="absolute top-0 left-0 right-0 h-12 pointer-events-none z-0 rounded-2xl sidebar-active-pill"
           style={{
             transform: `translateY(${activeIndex * 54}px)`,
             opacity: activeIndex >= 0 ? 1 : 0,
-            background: 'linear-gradient(135deg, #FF2A4B 0%, #D90429 100%)',
-            boxShadow: '0 4px 20px -2px rgba(250, 45, 72, 0.5), inset 0 1px 1px 0 rgba(255, 255, 255, 0.35)',
-            border: '1px solid rgba(255, 255, 255, 0.22)',
+            transition: 'transform 360ms cubic-bezier(0.25, 1, 0.5, 1), opacity 200ms ease',
           }}
         />
 
@@ -163,11 +156,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             <button
               key={item.id}
               onClick={item.onClick}
-              className={`relative z-10 flex items-center rounded-2xl font-medium text-sm transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer group active:scale-[0.97] ${
-                isCollapsed
-                  ? 'w-12 h-12 justify-center px-0 mx-auto'
-                  : 'w-full h-12 px-3.5 gap-3.5 justify-start'
-              } ${
+              className={`relative z-10 w-full h-12 flex items-center justify-start rounded-2xl font-medium text-sm overflow-hidden transition-colors duration-200 cursor-pointer group outline-none focus:outline-none focus-visible:outline-none border-none select-none active:scale-[0.98] ${
                 isActive
                   ? 'text-white font-semibold'
                   : 'text-white/70 hover:text-white hover:bg-white/[0.06]'
@@ -176,7 +165,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               aria-label={item.label}
             >
               <div
-                className={`w-5 h-5 flex items-center justify-center shrink-0 transition-transform duration-200 ${
+                className={`w-12 h-12 flex items-center justify-center shrink-0 transition-transform duration-200 ${
                   isActive ? 'scale-105' : 'group-hover:scale-105'
                 }`}
               >
@@ -184,10 +173,10 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               </div>
 
               <span
-                className={`whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden text-left ${
+                className={`whitespace-nowrap pr-3 text-left transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   isCollapsed
-                    ? 'max-w-0 opacity-0 -translate-x-2'
-                    : 'max-w-[160px] opacity-100 translate-x-0'
+                    ? 'opacity-0 -translate-x-2 pointer-events-none'
+                    : 'opacity-100 translate-x-0'
                 }`}
               >
                 {item.label}
@@ -197,39 +186,37 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         })}
       </nav>
 
-      {/* Account Profile Widget: Smoothly morphs without unmounting */}
+      {/* Account Profile Widget: Smoothly morphs without icon jump */}
       <div className="mt-auto pt-3">
         {onOpenAccount && (
           <button
             onClick={onOpenAccount}
-            className={`relative flex items-center rounded-2xl liquid-glass border border-white/10 hover:border-white/25 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer active:scale-[0.97] group ${
-              isCollapsed
-                ? 'w-12 h-12 justify-center p-0 mx-auto'
-                : 'w-full p-2.5 gap-3 justify-start'
-            }`}
+            className="relative w-full h-12 flex items-center justify-start rounded-2xl liquid-glass border border-white/10 hover:border-white/25 overflow-hidden transition-colors duration-200 cursor-pointer active:scale-[0.97] group"
             title={isSignedIn ? `${account?.name || 'Account'} (Signed In)` : 'Sign in to YouTube Music'}
           >
-            {isSignedIn && account?.thumbnailUrl ? (
-              <img
-                src={account.thumbnailUrl}
-                alt={account.name}
-                className="w-8 h-8 rounded-full object-cover border border-white/20 shrink-0"
-              />
-            ) : isSignedIn ? (
-              <div className="w-8 h-8 rounded-full bg-accent-red/20 border border-accent-red/40 flex items-center justify-center shrink-0 text-accent-red font-bold text-xs">
-                {account?.name ? account.name.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-white/10 border border-white/15 flex items-center justify-center shrink-0 text-white/70">
-                <User className="w-4 h-4" />
-              </div>
-            )}
+            <div className="w-12 h-12 flex items-center justify-center shrink-0">
+              {isSignedIn && account?.thumbnailUrl ? (
+                <img
+                  src={account.thumbnailUrl}
+                  alt={account.name}
+                  className="w-8 h-8 rounded-full object-cover border border-white/20"
+                />
+              ) : isSignedIn ? (
+                <div className="w-8 h-8 rounded-full bg-accent-red/20 border border-accent-red/40 flex items-center justify-center text-accent-red font-bold text-xs">
+                  {account?.name ? account.name.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-white/70">
+                  <User className="w-4 h-4" />
+                </div>
+              )}
+            </div>
 
             <div
-              className={`flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] text-left ${
+              className={`flex-1 min-w-0 pr-3 text-left transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                 isCollapsed
-                  ? 'max-w-0 opacity-0 -translate-x-2 pointer-events-none'
-                  : 'max-w-[150px] opacity-100 translate-x-0'
+                  ? 'opacity-0 -translate-x-2 pointer-events-none'
+                  : 'opacity-100 translate-x-0'
               }`}
             >
               <div className="text-xs font-bold text-white truncate">

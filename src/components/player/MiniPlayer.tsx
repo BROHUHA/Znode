@@ -31,6 +31,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
     togglePlay,
     next,
     prev,
+    seek,
     likeStatuses,
     toggleLike,
     setNowPlayingOpen,
@@ -115,15 +116,28 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
         onClick={() => setNowPlayingOpen(true)}
         className={`h-14 rounded-full liquid-glass-surface px-2.5 flex items-center gap-2.5 min-w-0 cursor-pointer active:scale-[0.98] transition-transform overflow-hidden shadow-2xl relative group ${className}`}
       >
-        {/* Real-time bottom progress bar */}
-        <div className="absolute bottom-1.5 left-5 right-5 h-[2px] bg-white/15 overflow-hidden rounded-full pointer-events-none">
-          <div
-            className="h-full transition-all duration-300 ease-linear rounded-full"
-            style={{
-              width: `${progressPercent}%`,
-              background: `linear-gradient(to right, ${accentColor}, #FA2D48)`,
-            }}
-          />
+        {/* Flush curved bottom seekbar */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!duration) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            seek(ratio * duration);
+          }}
+          className="absolute bottom-0 inset-x-0 h-3 flex items-end cursor-pointer z-20 group/seek"
+          title="Seek"
+        >
+          <div className="w-full h-[2.5px] group-hover/seek:h-[3.5px] bg-white/15 transition-all duration-150 overflow-hidden">
+            <div
+              className="h-full transition-[width] duration-200 ease-linear relative"
+              style={{
+                width: `${progressPercent}%`,
+                background: `linear-gradient(90deg, ${accentColor} 0%, #FA2D48 85%, #ffffff 100%)`,
+                boxShadow: `0 0 8px ${accentColor}99`,
+              }}
+            />
+          </div>
         </div>
 
         {/* 34px Album Artwork */}
@@ -193,20 +207,33 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ isInline = false, classN
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       style={{
-        transform: `translateX(${offsetX}px)`,
+        transform: offsetX !== 0 ? `translateX(${offsetX}px)` : undefined,
         transition: offsetX === 0 ? 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
       }}
       className={`relative w-full h-[64px] rounded-full liquid-glass-surface px-3 sm:px-3.5 flex items-center justify-between cursor-pointer group active:scale-[0.99] transition-transform overflow-hidden ${className}`}
     >
-      {/* Real-time bottom progress bar */}
-      <div className="absolute bottom-1.5 left-6 right-6 h-[2px] bg-white/15 overflow-hidden rounded-full pointer-events-none">
-        <div
-          className="h-full transition-all duration-300 ease-linear rounded-full"
-          style={{
-            width: `${progressPercent}%`,
-            background: `linear-gradient(to right, ${accentColor}, #FA2D48)`,
-          }}
-        />
+      {/* Flush curved bottom seekbar */}
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!duration) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          seek(ratio * duration);
+        }}
+        className="absolute bottom-0 inset-x-0 h-3 flex items-end cursor-pointer z-20 group/seek"
+        title="Seek"
+      >
+        <div className="w-full h-[2.5px] group-hover/seek:h-[3.5px] bg-white/15 transition-all duration-150 overflow-hidden">
+          <div
+            className="h-full transition-[width] duration-200 ease-linear relative"
+            style={{
+              width: `${progressPercent}%`,
+              background: `linear-gradient(90deg, ${accentColor} 0%, #FA2D48 85%, #ffffff 100%)`,
+              boxShadow: `0 0 8px ${accentColor}99`,
+            }}
+          />
+        </div>
       </div>
 
       {/* Ambient Palette Glow */}

@@ -36,7 +36,7 @@ function cleanArtistFromSubtitle(subtitle: string): string {
   return artist || subtitle;
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({ onOpenDetail }) => {
+export const HomeView: React.FC<HomeViewProps> = React.memo(({ onOpenDetail }) => {
   const cachedFeed = feedCache.loadHomeFeedCache();
   const initialShelves = cachedFeed?.shelves?.length
     ? cachedFeed.shelves
@@ -728,4 +728,4 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenDetail }) => {
       </div>
     </div>
   );
-};
+});

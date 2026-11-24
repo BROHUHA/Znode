@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Play, Shuffle, Music, ChevronRight, Heart, Plus } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { Play, Shuffle, Music, ChevronRight, Heart, Plus, FolderOpen } from 'lucide-react';
 import { DetailPage, Song, ShelfItem, HomeShelf } from '../types';
 import { innertubeService } from '../services/innertube';
 import { usePlayerStore } from '../stores/playerStore';
 import { useAuthStore } from '../stores/authStore';
+import { getLocalMusicSongs, addLocalMusicFiles } from '../utils/localMusic';
 
 interface DetailViewProps {
   browseId: string;
@@ -38,6 +39,7 @@ export const DetailView: React.FC<DetailViewProps> = ({
   const [detail, setDetail] = useState<DetailPage | null>(null);
   const [loading, setLoading] = useState(true);
   const { playSong, currentSong, isPlaying, likeStatuses, toggleLike, addToQueue, currentPalette } = usePlayerStore();
+  const localFileInputRef = useRef<HTMLInputElement>(null);
 
   // Active Artwork URL with smart multi-tier fallback (high-res -> standard -> track fallback -> null)
   const [artworkUrl, setArtworkUrl] = useState<string | null>(initialThumbnailUrl || null);
@@ -124,19 +126,46 @@ export const DetailView: React.FC<DetailViewProps> = ({
       }
     }
 
+    if (browseId.startsWith('UP_')) {
+      const localPl = useAuthStore.getState().userPlaylists.find((p) => p.id === browseId);
+      const songs = localPl?.songs || [];
+      setDetail({
+        browseId,
+        title: localPl?.title || initialTitle || 'Playlist',
+        subtitle: `Playlist • ${localPl?.author || 'You'}`,
+        thumbnailUrl: localPl?.thumbnailUrl || songs[0]?.thumbnailUrl || null,
+        type: 'PLAYLIST',
+        songs,
+        trackCount: songs.length,
+        description: localPl?.description || 'Custom local playlist in Znode Music.',
+      });
+      if (onTitleLoaded) onTitleLoaded(localPl?.title || initialTitle || 'Playlist');
+      setLoading(false);
+      return;
+    }
+
     if (browseId === 'local:downloads' || browseId === 'local:all') {
       const isDownloads = browseId === 'local:downloads';
+      let songs: Song[] = [];
+      if (isDownloads) {
+        try {
+          const raw = localStorage.getItem('znode_downloaded_songs_meta');
+          if (raw) songs = JSON.parse(raw);
+        } catch {}
+      } else {
+        songs = getLocalMusicSongs();
+      }
       setDetail({
         browseId,
         title: isDownloads ? 'Downloads' : 'Local Music',
         subtitle: isDownloads ? 'Downloaded songs on device' : 'Audio files on device',
-        thumbnailUrl: null,
+        thumbnailUrl: songs[0]?.thumbnailUrl || null,
         type: 'PLAYLIST',
-        songs: [],
-        trackCount: 0,
+        songs,
+        trackCount: songs.length,
         description: isDownloads
-          ? 'Tracks saved for offline playback on this device.'
-          : 'Local audio files stored on your device.',
+          ? 'Tracks you downloaded from the player appear here.'
+          : 'Import MP3, M4A, WAV, or FLAC audio files from your device to play them.',
       });
       if (onTitleLoaded) onTitleLoaded(isDownloads ? 'Downloads' : 'Local Music');
       setLoading(false);
@@ -197,6 +226,26 @@ export const DetailView: React.FC<DetailViewProps> = ({
 
     if (browseId === 'VLLM') {
       const { likedSongs, account } = useAuthStore.getState();
+      let localLiked: Song[] = [];
+      try {
+        const raw = localStorage.getItem('znode_local_liked_songs');
+        if (raw) localLiked = JSON.parse(raw);
+      } catch {}
+
+      const mergeLiked = (primary: Song[], secondary: Song[]): Song[] => {
+        const seen = new Set<string>();
+        const out: Song[] = [];
+        for (const s of [...primary, ...secondary]) {
+          if (s?.videoId && !seen.has(s.videoId)) {
+            seen.add(s.videoId);
+            out.push(s);
+          }
+        }
+        return out;
+      };
+
+      const fallbackLiked = mergeLiked(localLiked, likedSongs);
+
       innertubeService
         .getBrowse('VLLM', params, {
           title: 'Liked Music',
@@ -204,7 +253,10 @@ export const DetailView: React.FC<DetailViewProps> = ({
         })
         .then((remoteData) => {
           if (!isMounted) return;
-          const songs = remoteData.songs && remoteData.songs.length > 0 ? remoteData.songs : likedSongs;
+          const songs =
+            remoteData.songs && remoteData.songs.length > 0
+              ? mergeLiked(remoteData.songs, fallbackLiked)
+              : fallbackLiked;
           setDetail({
             ...remoteData,
             browseId: 'VLLM',
@@ -224,10 +276,10 @@ export const DetailView: React.FC<DetailViewProps> = ({
             browseId: 'VLLM',
             title: 'Liked Music',
             subtitle: `Auto Playlist • ${account?.name || 'Local'}`,
-            thumbnailUrl: likedSongs[0]?.thumbnailUrl || null,
+            thumbnailUrl: fallbackLiked[0]?.thumbnailUrl || null,
             type: 'PLAYLIST',
-            songs: likedSongs,
-            trackCount: likedSongs.length,
+            songs: fallbackLiked,
+            trackCount: fallbackLiked.length,
             description: 'Songs you have liked in Znode Music',
           });
           if (onTitleLoaded) onTitleLoaded('Liked Music');
@@ -472,10 +524,7 @@ export const DetailView: React.FC<DetailViewProps> = ({
               <div
                 className="absolute inset-0 transition-all duration-1000"
                 style={{
-                  background: `
-                    radial-gradient(ellipse 110% 80% at 50% 15%, ${currentPalette.dominant}30 0%, ${currentPalette.bottomColor}18 50%, transparent 80%),
-                    linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(9,8,14,0.6) 45%, transparent 100%)
-                  `,
+                  background: `radial-gradient(ellipse 110% 80% at 50% 15%, ${currentPalette.dominant}30 0%, ${currentPalette.bottomColor}18 50%, transparent 80%)`,
                 }}
               />
             )}
@@ -546,32 +595,70 @@ export const DetailView: React.FC<DetailViewProps> = ({
                 )}
               </div>
 
-              {/* Action Transport Buttons (Play All & Shuffle) */}
-              {detail.songs.length > 0 && (
-                <div className="flex items-center justify-center sm:justify-start gap-3 mt-4">
-                  <button
-                    onClick={() => handlePlayAll(false)}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-full text-white font-bold text-xs shadow-xl active:scale-95 hover:scale-105 transition-all cursor-pointer border border-white/25"
-                    style={{
-                      background: currentPalette
-                        ? `linear-gradient(135deg, ${currentPalette.dominant}, #FF4B63)`
-                        : 'linear-gradient(135deg, #FA2D48, #FF4B63)',
-                      boxShadow: currentPalette
-                        ? `0 0 25px ${currentPalette.dominant}55`
-                        : '0 0 25px rgba(250,45,72,0.45)',
-                    }}
-                  >
-                    <Play className="w-4 h-4 fill-white text-white" />
-                    <span>Play All</span>
-                  </button>
+              {/* Action Transport Buttons (Play All & Shuffle + Local File Import) */}
+              {(detail.songs.length > 0 || browseId === 'local:all') && (
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-4">
+                  {detail.songs.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => handlePlayAll(false)}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-full text-white font-bold text-xs shadow-xl active:scale-95 hover:scale-105 transition-all cursor-pointer border border-white/25"
+                        style={{
+                          background: currentPalette
+                            ? `linear-gradient(135deg, ${currentPalette.dominant}, #FF4B63)`
+                            : 'linear-gradient(135deg, #FA2D48, #FF4B63)',
+                          boxShadow: currentPalette
+                            ? `0 0 25px ${currentPalette.dominant}55`
+                            : '0 0 25px rgba(250,45,72,0.45)',
+                        }}
+                      >
+                        <Play className="w-4 h-4 fill-white text-white" />
+                        <span>Play All</span>
+                      </button>
 
-                  <button
-                    onClick={() => handlePlayAll(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full liquid-glass-pill text-white font-semibold text-xs active:scale-95 hover:scale-105 transition-all cursor-pointer hover:bg-white/15"
-                  >
-                    <Shuffle className="w-4 h-4" />
-                    <span>Shuffle</span>
-                  </button>
+                      <button
+                        onClick={() => handlePlayAll(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-full liquid-glass-pill text-white font-semibold text-xs active:scale-95 hover:scale-105 transition-all cursor-pointer hover:bg-white/15"
+                      >
+                        <Shuffle className="w-4 h-4" />
+                        <span>Shuffle</span>
+                      </button>
+                    </>
+                  )}
+
+                  {browseId === 'local:all' && (
+                    <>
+                      <input
+                        ref={localFileInputRef}
+                        type="file"
+                        accept="audio/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            const updated = addLocalMusicFiles(e.target.files);
+                            setDetail((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    songs: updated,
+                                    trackCount: updated.length,
+                                  }
+                                : prev
+                            );
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => localFileInputRef.current?.click()}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-full liquid-glass-pill text-white font-semibold text-xs active:scale-95 hover:scale-105 transition-all cursor-pointer hover:bg-white/15 border border-emerald-400/35"
+                      >
+                        <FolderOpen className="w-4 h-4 text-emerald-400" />
+                        <span>Import Audio Files</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

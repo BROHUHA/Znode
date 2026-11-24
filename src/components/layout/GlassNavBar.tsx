@@ -95,28 +95,31 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
   };
 
   const isSearchActive = currentTab === 'search';
+  const activeTabIndex = tabs.findIndex((t) => t.id === currentTab);
 
   return (
     <nav
       aria-label="Mobile Navigation"
       style={{
-        transition: 'opacity 220ms ease, transform 240ms cubic-bezier(0.2, 0, 0, 1)',
+        transition: 'opacity 280ms ease, transform 340ms cubic-bezier(0.22, 1, 0.36, 1)',
       }}
-      className={`md:hidden fixed bottom-3 inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-auto will-change-transform ${
-        isNowPlayingOpen ? 'opacity-0 translate-y-12 pointer-events-none' : 'opacity-100 translate-y-0'
+      className={`md:hidden fixed bottom-3 inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-none ${
+        isNowPlayingOpen ? 'opacity-0 translate-y-12' : 'opacity-100 translate-y-0'
       }`}
     >
-      {/* Container with relative positioning anchored at bottom */}
-      <div className="relative w-full flex flex-col items-center justify-end">
-        {/* 1. ExpandedBar: AnimatedContent targetState = false */}
+      {/* Grid stack anchored at bottom: both bars share cell [1/1] with zero position:relative/absolute snap */}
+      <div className="grid grid-cols-1 items-end w-full">
+        {/* 1. ExpandedBar: Liquid Glass Morph */}
         <div
           style={{
-            transition: 'opacity 200ms ease, transform 220ms cubic-bezier(0.2, 0, 0, 1)',
+            transition:
+              'opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1)',
+            willChange: 'transform, opacity',
           }}
-          className={`flex flex-col items-center gap-2 w-full will-change-[opacity,transform] ${
-            !isInline
-              ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto relative z-10'
-              : 'opacity-0 scale-95 translate-y-3 pointer-events-none absolute bottom-0 inset-x-0 z-0'
+          className={`col-start-1 row-start-1 flex flex-col items-center gap-2 w-full origin-bottom ${
+            !isInline && !isNowPlayingOpen
+              ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto z-10'
+              : 'opacity-0 scale-[0.95] translate-y-3 pointer-events-none z-0'
           }`}
         >
           {/* Expanded Accessory: Full-width player pill */}
@@ -124,23 +127,35 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
 
           {/* Tab Row: [Home, Explore, Library pill] + [Search circle] */}
           <div className="flex items-center gap-2 w-full">
-            <div className="h-14 rounded-full liquid-glass-surface flex-1 px-2 flex items-center justify-around relative overflow-hidden">
+            <div className="h-14 rounded-full liquid-glass-surface flex-1 p-1.5 grid grid-cols-3 items-center relative overflow-hidden">
+              {/* Gliding iOS 26 Liquid Glass Active Pill */}
+              {activeTabIndex >= 0 && (
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-y-1.5 left-1.5 w-[calc((100%-12px)/3)] rounded-full pointer-events-none z-0 liquid-glass-tab-pill will-change-transform"
+                  style={{
+                    transform: `translateX(${activeTabIndex * 100}%)`,
+                    transition: 'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease',
+                  }}
+                />
+              )}
+
               {tabs.map((tab) => {
                 const isActive = currentTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => onSelectTab(tab.id)}
-                    className={`relative z-10 flex flex-col items-center justify-center py-1 px-3 rounded-full transition-all duration-150 cursor-pointer ${
+                    className={`relative z-10 flex flex-col items-center justify-center h-full rounded-full transition-all duration-200 cursor-pointer ${
                       isActive
-                        ? 'text-white scale-105 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] font-bold'
+                        ? 'text-white scale-[1.03] drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] font-bold'
                         : 'text-white/60 hover:text-white active:scale-95 font-medium'
                     }`}
                   >
-                    <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-5 flex items-center justify-center shrink-0">
                       {renderTabIcon(tab.id, isActive)}
                     </div>
-                    <span className="text-[11px] tracking-tight leading-none mt-0.5">
+                    <span className="text-[10.5px] tracking-tight leading-none mt-0.5">
                       {tab.label}
                     </span>
                   </button>
@@ -151,7 +166,7 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
             {/* Standalone Search Circle */}
             <button
               onClick={() => onSelectTab('search')}
-              className={`w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 active:scale-90 transition-transform duration-150 cursor-pointer ${
+              className={`w-14 h-14 rounded-full liquid-glass-surface relative overflow-hidden flex items-center justify-center shrink-0 active:scale-90 transition-all duration-200 cursor-pointer ${
                 isSearchActive
                   ? 'text-white ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.25)]'
                   : 'text-white/75 hover:text-white'
@@ -166,15 +181,17 @@ export const GlassNavBar: React.FC<GlassNavBarProps> = ({
           </div>
         </div>
 
-        {/* 2. InlineBar: AnimatedContent targetState = true (Morphs into single 56px row on scroll down) */}
+        {/* 2. InlineBar: Liquid Glass Morph into single 56px row on scroll down */}
         <div
           style={{
-            transition: 'opacity 200ms ease, transform 220ms cubic-bezier(0.2, 0, 0, 1)',
+            transition:
+              'opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1)',
+            willChange: 'transform, opacity',
           }}
-          className={`flex items-center gap-2 w-full will-change-[opacity,transform] ${
-            isInline
-              ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto relative z-10'
-              : 'opacity-0 scale-95 translate-y-3 pointer-events-none absolute bottom-0 inset-x-0 z-0'
+          className={`col-start-1 row-start-1 self-end flex items-center gap-2 w-full origin-bottom ${
+            isInline && !isNowPlayingOpen
+              ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto z-10'
+              : 'opacity-0 scale-[0.95] -translate-y-2 pointer-events-none z-0'
           } ${!currentSong ? 'justify-center max-w-[130px] mx-auto' : ''}`}
         >
           {/* InlineTab: Single Active Tab Circle (Tap to expand) */}

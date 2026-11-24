@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowLeft, Music2, ListMusic, Radio, X } from 'lucide-react';
 import { DesktopSidebar, NavTab } from './DesktopSidebar';
 import { GlassNavBar } from './GlassNavBar';
@@ -30,10 +30,26 @@ export const AppShell: React.FC = () => {
   const { results: searchResults } = useSearchStore();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [isScrolled, setIsScrolled] = useState(false);
+  const isScrolledRef = useRef(false);
   const [isBottomInline, setIsBottomInline] = useState(false);
+  const isBottomInlineRef = useRef(false);
   const accumulatedDelta = useRef(0);
   const lastScrollY = useRef(0);
+  const mainRef = useRef<HTMLElement>(null);
   const [selectedBrowse, setSelectedBrowse] = useState<BrowseTarget | null>(null);
+
+  // Reset scroll position to top whenever switching tabs, opening detail views, or switching main view mode
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+    lastScrollY.current = 0;
+    accumulatedDelta.current = 0;
+    if (isScrolledRef.current) {
+      isScrolledRef.current = false;
+      setIsScrolled(false);
+    }
+  }, [currentTab, selectedBrowse, nowPlayingTab]);
   const [showSettings, setShowSettings] = useState(false);
   const [showEqualizer, setShowEqualizer] = useState(false);
   const [showListenTogether, setShowListenTogether] = useState(false);
@@ -105,7 +121,7 @@ export const AppShell: React.FC = () => {
     }
   }, [currentSong?.videoId]);
 
-  const handleOpenDetail = (
+  const handleOpenDetail = useCallback((
     browseId: string,
     params?: string,
     title?: string,
@@ -115,28 +131,38 @@ export const AppShell: React.FC = () => {
   ) => {
     setNowPlayingTab('PLAYER');
     setSelectedBrowse({ browseId, params, title, subtitle, thumbnailUrl, type });
-  };
+  }, [setNowPlayingTab]);
 
-  const handleSelectTab = (tab: NavTab) => {
+  const handleSelectTab = useCallback((tab: NavTab) => {
     setSelectedBrowse(null);
     setCurrentTab(tab);
     setNowPlayingTab('PLAYER');
-    setIsBottomInline(false);
+    if (isBottomInlineRef.current) {
+      isBottomInlineRef.current = false;
+      setIsBottomInline(false);
+    }
     accumulatedDelta.current = 0;
-  };
+  }, [setNowPlayingTab]);
 
   const handleScroll = (e: React.UIEvent<HTMLElement>) => {
     const currentScrollY = e.currentTarget.scrollTop;
-    setIsScrolled(currentScrollY > 20);
+    
+    // Only dispatch state update when crossed boundary
+    const nextScrolled = currentScrollY > 20;
+    if (isScrolledRef.current !== nextScrolled) {
+      isScrolledRef.current = nextScrolled;
+      setIsScrolled(nextScrolled);
+    }
 
     const deltaY = currentScrollY - lastScrollY.current;
 
-    // If near the top, always keep fully expanded
-    if (currentScrollY <= 25) {
-      setIsBottomInline(false);
+    if (currentScrollY <= 30) {
+      if (isBottomInlineRef.current) {
+        isBottomInlineRef.current = false;
+        setIsBottomInline(false);
+      }
       accumulatedDelta.current = 0;
     } else {
-      // Reset accumulated scroll on direction reversal
       if (
         (accumulatedDelta.current > 0 && deltaY < 0) ||
         (accumulatedDelta.current < 0 && deltaY > 0)
@@ -145,14 +171,18 @@ export const AppShell: React.FC = () => {
       }
       accumulatedDelta.current += deltaY;
 
-      // Scrolling down past threshold -> shrink to inline single row
-      if (accumulatedDelta.current >= 28) {
-        setIsBottomInline(true);
+      // Stable 100px / -60px threshold prevents micro-jitter
+      if (accumulatedDelta.current >= 100) {
+        if (!isBottomInlineRef.current) {
+          isBottomInlineRef.current = true;
+          setIsBottomInline(true);
+        }
         accumulatedDelta.current = 0;
-      }
-      // Scrolling up past threshold -> expand back to two-tier full view
-      else if (accumulatedDelta.current <= -24) {
-        setIsBottomInline(false);
+      } else if (accumulatedDelta.current <= -60) {
+        if (isBottomInlineRef.current) {
+          isBottomInlineRef.current = false;
+          setIsBottomInline(false);
+        }
         accumulatedDelta.current = 0;
       }
     }
@@ -277,8 +307,9 @@ export const AppShell: React.FC = () => {
       <div className="flex-1 h-full overflow-hidden relative z-10">
         {/* Scrollable feed: full height, content starts under the top bar with padding */}
         <main
+          ref={mainRef}
           onScroll={handleScroll}
-          className={`h-full overflow-y-auto overflow-x-hidden relative scrollbar-none transition-[padding] duration-300 ${
+          className={`h-full overflow-y-auto overflow-x-hidden relative scrollbar-none ${
             currentTab === 'search' && !selectedBrowse && searchResults !== null
               ? 'pt-24 sm:pt-28'
               : 'pt-14 sm:pt-16'
@@ -286,8 +317,8 @@ export const AppShell: React.FC = () => {
             currentSong ? 'pb-44 md:pb-28 lg:pb-8' : 'pb-24 md:pb-12 lg:pb-8'
           }`}
           style={{
-            transform: 'translate3d(0, 0, 0)',
             WebkitOverflowScrolling: 'touch',
+            contain: 'content',
           }}
         >
           {/* On Desktop (>= lg 1024px), if user clicks Lyrics or Queue, display it directly in the main feed screen */}
@@ -462,20 +493,6 @@ export const AppShell: React.FC = () => {
 
         {/* Mobile Bottom Fade Scrim: Dissolves scrolling items smoothly above bottom navigation */}
         <div className="md:hidden bottom-fade-scrim" />
-
-        {/* Real Edge Refraction SVG Displacement Map (Chromium/WebGL lens warping filter) */}
-        <svg
-          className="sr-only"
-          aria-hidden="true"
-          style={{ position: 'fixed', width: 0, height: 0, pointerEvents: 'none' }}
-        >
-          <defs>
-            <filter id="refract" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
-              <feTurbulence type="fractalNoise" baseFrequency="0.015 0.04" numOctaves="2" result="noise" />
-              <feDisplacementMap in="SourceGraphic" in2="noise" scale="8" xChannelSelector="R" yChannelSelector="G" result="displaced" />
-            </filter>
-          </defs>
-        </svg>
 
         {/* Mobile Liquid Glass Navigation Bar with Integrated Expand/Shrink Player */}
         <GlassNavBar
