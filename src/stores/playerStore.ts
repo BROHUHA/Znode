@@ -499,24 +499,33 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (!streamUrl) {
         try {
           const durationSec = parseDurationSec(song.durationText);
-          const quality = useSettingsStore.getState().audioQuality;
 
-          // If user prefers High or Lossless quality, query verified JioSaavn CDN (320kbps AAC)
-          // TrackMatcher strictly prevents playing wrong songs
-          // Apply a hard timeout so playback never stalls waiting for JioSaavn
-          if (quality !== 'LOW') {
-            try {
-              const saavnMatch = await Promise.race([
-                jioSaavnService.findMatch(song.title, song.artist, durationSec),
-                new Promise<null>((r) => setTimeout(() => r(null), 3000)),
-              ]);
-              if (saavnMatch && !saavnMatch.includes('googlevideo.com')) {
-                streamUrl = saavnMatch;
-                streamCache.set(song.videoId, saavnMatch);
-              }
-            } catch (e) {
-              console.warn('JioSaavn match failed, using YouTube fallback:', e);
+          // Always prefer native HTML5 <audio> (JioSaavn CDN or direct YouTube audio stream)
+          // so mobile Chrome keeps playing seamlessly in background / locked screen.
+          try {
+            const saavnMatch = await Promise.race([
+              jioSaavnService.findMatch(song.title, song.artist, durationSec),
+              new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+            ]);
+            if (saavnMatch) {
+              streamUrl = saavnMatch;
+              streamCache.set(song.videoId, saavnMatch);
             }
+          } catch (e) {
+            console.warn('JioSaavn match failed:', e);
+          }
+
+          if (!streamUrl) {
+            try {
+              const ytAudioUrl = await Promise.race([
+                innertubeService.resolveAudioStream(song.videoId),
+                new Promise<string>((r) => setTimeout(() => r(''), 2500)),
+              ]);
+              if (ytAudioUrl) {
+                streamUrl = ytAudioUrl;
+                streamCache.set(song.videoId, ytAudioUrl);
+              }
+            } catch {}
           }
         } catch (e) {
           console.warn('Stream resolution error:', e);
@@ -532,8 +541,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       // Clear any previous playback timeout
       clearPlaybackTimeout();
 
-      // Playback: JioSaavn CDN stream via HTML5 audio (supports EQ/DSP), or YouTube IFrame fallback
-      if (streamUrl && !streamUrl.includes('googlevideo.com')) {
+      // Playback: Native HTML5 <audio> (JioSaavn CDN or direct YouTube audio stream), or YouTube IFrame fallback
+      if (streamUrl) {
         try {
           await audioEngine.playUrl(streamUrl, 0, song.videoId, fromCrossfade);
         } catch (err) {
