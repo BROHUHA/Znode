@@ -204,6 +204,11 @@ export class AudioEngine {
 
     const keepAlive = () => {
       if (!this.intendedPlaying) return;
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.playbackState = 'playing';
+        } catch {}
+      }
       if (this.mode === 'YOUTUBE') {
         if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
           try {
@@ -836,8 +841,12 @@ export class AudioEngine {
       return;
     }
 
-    // Play direct googlevideo.com streams on non-CORS HTMLAudioElement for reliable mobile background playback
-    if (streamUrl.includes('googlevideo.com')) {
+    // Route googlevideo.com streams through same-origin /api/stream (IP-matched + Range-enabled)
+    // so HTML5 <audio> plays seamlessly in Chrome mobile background without 403 or iframe suspension.
+    let effectiveUrl = streamUrl;
+    if (streamUrl.includes('googlevideo.com') && typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+      effectiveUrl = `/api/stream?url=${encodeURIComponent(streamUrl)}`;
+    } else if (streamUrl.includes('googlevideo.com')) {
       const gen = ++this.playGeneration;
       this.intendedPlaying = true;
       this.hasTriggeredCrossfade = false;
@@ -929,7 +938,7 @@ export class AudioEngine {
         deckGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
       }
 
-      deck.src = streamUrl;
+      deck.src = effectiveUrl;
       // Always start at full target volume immediately (no fade-in)
       deck.volume = this.currentVolume;
       deck.playbackRate = 1.0;
