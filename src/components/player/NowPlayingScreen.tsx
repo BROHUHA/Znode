@@ -152,6 +152,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [isListScrolled, setIsListScrolled] = useState(false);
+  const lastListScrollTopRef = useRef<number>(0);
+  const [skipFeedback, setSkipFeedback] = useState<{ side: 'left' | 'right'; key: number } | null>(null);
+  const lastTapRef = useRef<{ time: number; side: 'left' | 'right' } | null>(null);
   const [downloadedSongs, setDownloadedSongs] = useState<Set<string>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'IDLE' | 'DOWNLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
@@ -176,7 +180,14 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   const userScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // ── Professional iOS-class Swipe Gesture Engine ──
-  const touchStartRef = useRef<{ y: number; t: number; scrollable: boolean; lastY: number; lastT: number } | null>(null);
+  const touchStartRef = useRef<{
+    y: number;
+    t: number;
+    scrollableEl: HTMLElement | null;
+    engagedSwipe: boolean;
+    lastY: number;
+    lastT: number;
+  } | null>(null);
   const [swipeY, setSwipeY] = useState(0);
   const [isSpringBack, setIsSpringBack] = useState(false);
   const animRef = useRef<number>(0);
@@ -254,34 +265,50 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
 
     // Check if the touch started inside a scrollable child
     const target = e.target as HTMLElement;
-    const scrollable = !!target.closest('[data-scrollable]');
+    const scrollableEl = target.closest('[data-scrollable]') as HTMLElement | null;
     const y = e.touches[0].clientY;
 
-    touchStartRef.current = { y, t: Date.now(), scrollable, lastY: y, lastT: Date.now() };
+    touchStartRef.current = { y, t: Date.now(), scrollableEl, engagedSwipe: false, lastY: y, lastT: Date.now() };
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (isDocked || !touchStartRef.current) return;
-    if (touchStartRef.current.scrollable) return; // Don't interfere with scrollable areas
 
     const currentY = e.touches[0].clientY;
     const dy = currentY - touchStartRef.current.y;
+
+    // If inside a scrollable list (Queue or Lyrics), only engage swipe-down when at the very top (scrollTop <= 2)
+    if (touchStartRef.current.scrollableEl) {
+      const atTop = touchStartRef.current.scrollableEl.scrollTop <= 2;
+      if (!touchStartRef.current.engagedSwipe) {
+        if (dy > 8 && atTop) {
+          touchStartRef.current.engagedSwipe = true;
+          touchStartRef.current.y = currentY;
+        } else {
+          return;
+        }
+      }
+    }
+
+    const activeDy = touchStartRef.current.engagedSwipe
+      ? currentY - touchStartRef.current.y
+      : dy;
 
     // Track last position for velocity calculation
     touchStartRef.current.lastY = currentY;
     touchStartRef.current.lastT = Date.now();
 
     // Swipe down (positive) with rubber-band resistance
-    if (dy > 0 && nowPlayingTab === 'PLAYER') {
-      setSwipeY(rubberBand(dy, 350, 0.45));
+    if (activeDy > 0 && nowPlayingTab === 'PLAYER') {
+      setSwipeY(rubberBand(activeDy, 350, 0.45));
     }
     // Swipe up (negative) — slight rubber-band feedback for queue gesture
-    else if (dy < 0 && nowPlayingTab === 'PLAYER') {
-      setSwipeY(rubberBand(dy, 150, 0.6));
+    else if (activeDy < 0 && nowPlayingTab === 'PLAYER') {
+      setSwipeY(rubberBand(activeDy, 150, 0.6));
     }
     // Swipe down on Queue/Lyrics tabs — go back to player
-    else if (dy > 0 && nowPlayingTab !== 'PLAYER') {
-      setSwipeY(rubberBand(dy, 200, 0.5));
+    else if (activeDy > 0 && nowPlayingTab !== 'PLAYER') {
+      setSwipeY(rubberBand(activeDy, 200, 0.5));
     }
   };
 
@@ -290,7 +317,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
     const ref = touchStartRef.current;
     touchStartRef.current = null;
 
-    if (ref.scrollable) return;
+    if (ref.scrollableEl && !ref.engagedSwipe) return;
 
     const dy = swipeY;
     const dt = Math.max(Date.now() - ref.t, 1);
@@ -327,6 +354,48 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
   useEffect(() => {
     setArtworkUrl(getHighResArtwork(currentSong?.thumbnailUrl, currentSong?.videoId));
   }, [currentSong?.thumbnailUrl, currentSong?.videoId]);
+
+  // Reset scroll-collapse state when switching tabs
+  useEffect(() => {
+    setIsListScrolled(false);
+    lastListScrollTopRef.current = 0;
+  }, [nowPlayingTab]);
+
+  const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const st = e.currentTarget.scrollTop;
+    const delta = st - lastListScrollTopRef.current;
+    lastListScrollTopRef.current = st;
+
+    if (st <= 16) {
+      if (isListScrolled) setIsListScrolled(false);
+    } else if (delta > 8 && st > 40) {
+      if (!isListScrolled) setIsListScrolled(true);
+    } else if (delta < -12) {
+      if (isListScrolled) setIsListScrolled(false);
+    }
+  };
+
+  const handleThumbnailTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDocked || nowPlayingTab !== 'PLAYER') return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const side: 'left' | 'right' = e.clientX - rect.left < rect.width / 2 ? 'left' : 'right';
+    const now = Date.now();
+
+    if (lastTapRef.current && lastTapRef.current.side === side && now - lastTapRef.current.time < 320) {
+      lastTapRef.current = null;
+      const targetTime =
+        side === 'left'
+          ? Math.max(0, currentTime - 10)
+          : Math.min(duration || currentTime + 10, currentTime + 10);
+      seek(targetTime);
+      setSkipFeedback({ side, key: now });
+      setTimeout(() => {
+        setSkipFeedback((prev) => (prev?.key === now ? null : prev));
+      }, 650);
+    } else {
+      lastTapRef.current = { time: now, side };
+    }
+  };
 
   // Clean up user scroll timeout
   useEffect(() => {
@@ -618,7 +687,7 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
         const metaList: any[] = metaRaw ? JSON.parse(metaRaw) : [];
         const filtered = metaList.filter((s) => s.videoId !== currentSong.videoId);
         localStorage.setItem('znode_downloaded_songs_meta', JSON.stringify([currentSong, ...filtered]));
-      } catch {}
+      } catch { }
 
       setDownloadStatus('SUCCESS');
       setTimeout(() => setDownloadStatus('IDLE'), 2500);
@@ -905,92 +974,138 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                 {nowPlayingTab === 'LYRICS'
                   ? 'Lyrics'
                   : nowPlayingTab === 'QUEUE'
-                  ? 'Up Next'
-                  : currentSong.albumName
-                  ? `Playing from ${currentSong.albumName}`
-                  : currentSong.radioName
-                  ? `Playing from ${currentSong.radioName}`
-                  : 'Playing from Search'}
+                    ? 'Up Next'
+                    : currentSong.albumName
+                      ? `Playing from ${currentSong.albumName}`
+                      : currentSong.radioName
+                        ? `Playing from ${currentSong.radioName}`
+                        : 'Playing from Search'}
               </p>
             </div>
 
-              {/* Sleep Timer icon in header */}
-              {onOpenSleepTimer ? (
-                <button
-                  onClick={onOpenSleepTimer}
-                  className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer ${
-                    sleepTimerEndTime || sleepTimerEndOfTrack
-                      ? 'bg-accent-red/20 text-accent-red border border-accent-red/40 shadow-[0_0_12px_rgba(250,45,72,0.3)] animate-pulse'
-                      : 'text-white/60 hover:text-white hover:bg-white/10'
+            {/* Sleep Timer icon in header */}
+            {onOpenSleepTimer ? (
+              <button
+                onClick={onOpenSleepTimer}
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer ${sleepTimerEndTime || sleepTimerEndOfTrack
+                  ? 'bg-accent-red/20 text-accent-red border border-accent-red/40 shadow-[0_0_12px_rgba(250,45,72,0.3)] animate-pulse'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
                   }`}
-                  title={
-                    sleepTimerEndOfTrack
-                      ? 'Sleep timer: End of track'
-                      : sleepTimerEndTime
+                title={
+                  sleepTimerEndOfTrack
+                    ? 'Sleep timer: End of track'
+                    : sleepTimerEndTime
                       ? `Sleep timer: ${Math.ceil((sleepTimerRemainingSeconds || 0) / 60)}m left`
                       : 'Sleep Timer'
-                  }
-                  aria-label="Sleep Timer"
-                >
-                  <Moon className={`w-4.5 h-4.5 ${sleepTimerEndTime || sleepTimerEndOfTrack ? 'fill-accent-red' : ''}`} />
-                </button>
-              ) : (
-                <div className="w-9 h-9 pointer-events-none" />
-              )}
+                }
+                aria-label="Sleep Timer"
+              >
+                <Moon className={`w-4.5 h-4.5 ${sleepTimerEndTime || sleepTimerEndOfTrack ? 'fill-accent-red' : ''}`} />
+              </button>
+            ) : (
+              <div className="w-9 h-9 pointer-events-none" />
+            )}
           </div>
         )}
 
         {/* View Switcher: PLAYER vs LYRICS vs QUEUE */}
         {(nowPlayingTab === 'PLAYER' || isDocked) && (
           <>
-            {/* Spacer over upper hero artwork so details & controls start from the middle */}
-            <div className="flex-1 min-h-[24vh]" />
+            {/* Interactive Spacer over upper hero artwork: double-tap left (-10s) / right (+10s) on mobile */}
+            <div
+              onClick={handleThumbnailTap}
+              className="relative flex-1 min-h-[24vh] flex items-center justify-between px-6 select-none"
+            >
+              {skipFeedback?.side === 'left' && (
+                <div
+                  key={skipFeedback.key}
+                  className="px-3.5 py-2 rounded-full liquid-glass text-white text-xs font-bold flex items-center gap-1.5 shadow-xl animate-scale-in pointer-events-none"
+                >
+                  <span>↺ 10s</span>
+                </div>
+              )}
+              <div />
+              {skipFeedback?.side === 'right' && (
+                <div
+                  key={skipFeedback.key}
+                  className="px-3.5 py-2 rounded-full liquid-glass text-white text-xs font-bold flex items-center gap-1.5 shadow-xl animate-scale-in pointer-events-none"
+                >
+                  <span>10s ↻</span>
+                </div>
+              )}
+            </div>
             <div className="flex flex-col shrink-0 mb-3 sm:mb-4">
               {/* Track Info Row + Liquid Glass Action Buttons */}
-            <div className="w-full flex items-center justify-between mb-1.5">
-              <div className="overflow-hidden pr-3 flex-1 min-w-0">
-                <h2 className="text-2xl sm:text-[28px] font-bold text-white truncate leading-tight tracking-tight drop-shadow-sm">
-                  {currentSong.title}
-                </h2>
-                <p className="text-sm sm:text-base font-medium text-white/70 truncate mt-0.5">
-                  {currentSong.artist}
-                </p>
+              <div className="w-full flex items-center justify-between mb-1.5">
+                <div className="overflow-hidden pr-3 flex-1 min-w-0">
+                  <h2 className="text-2xl sm:text-[28px] font-bold text-white truncate leading-tight tracking-tight drop-shadow-sm">
+                    {currentSong.title}
+                  </h2>
+                  <p className="text-sm sm:text-base font-medium text-white/70 truncate mt-0.5">
+                    {currentSong.artist}
+                  </p>
+                </div>
+
+                {/* Liquid Glass Circular Action Buttons: Like (♡) & More (•••) */}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    onClick={() => toggleLike(currentSong.videoId)}
+                    className={`liquid-glass-btn-icon w-11 h-11 sm:w-12 sm:h-12 ${isLiked
+                      ? '!bg-accent-red/20 !border-accent-red/40 text-accent-red shadow-[0_0_18px_rgba(250,45,72,0.35)]'
+                      : 'text-white/90'
+                      }`}
+                    title={isLiked ? 'Liked' : 'Like'}
+                  >
+                    <Heart className={`w-5 h-5 ${isLiked ? 'fill-accent-red text-accent-red' : ''}`} />
+                  </button>
+
+                  <button
+                    onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                    className="liquid-glass-btn-icon w-11 h-11 sm:w-12 sm:h-12 text-white/90"
+                    title="More Options"
+                  >
+                    <MoreHorizontal className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
-              {/* Liquid Glass Circular Action Buttons: Like (♡) & More (•••) */}
-              <div className="flex items-center gap-2.5 shrink-0">
+              {/* Lyrics Link Chip — Apple Music style: ♫ Lyrics > */}
+              <div className="w-full flex items-center justify-start mt-1 mb-1.5">
                 <button
-                  onClick={() => toggleLike(currentSong.videoId)}
-                  className={`liquid-glass-btn-icon w-11 h-11 sm:w-12 sm:h-12 ${isLiked
-                    ? '!bg-accent-red/20 !border-accent-red/40 text-accent-red shadow-[0_0_18px_rgba(250,45,72,0.35)]'
-                    : 'text-white/90'
-                    }`}
-                  title={isLiked ? 'Liked' : 'Like'}
+                  onClick={() => setNowPlayingTab('LYRICS')}
+                  className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-[13px] font-medium transition-all active:scale-95 group cursor-pointer"
                 >
-                  <Heart className={`w-5 h-5 ${isLiked ? 'fill-accent-red text-accent-red' : ''}`} />
-                </button>
-
-                <button
-                  onClick={() => setShowOptionsMenu(!showOptionsMenu)}
-                  className="liquid-glass-btn-icon w-11 h-11 sm:w-12 sm:h-12 text-white/90"
-                  title="More Options"
-                >
-                  <MoreHorizontal className="w-5 h-5" />
+                  <span className="text-xs text-white/80">♫</span>
+                  <span>Lyrics</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-white/40 group-hover:translate-x-0.5 transition-transform" />
                 </button>
               </div>
             </div>
 
-            {/* Lyrics Link Chip — Apple Music style: ♫ Lyrics > */}
-            <div className="w-full flex items-center justify-start mt-1 mb-1.5">
-              <button
-                onClick={() => setNowPlayingTab('LYRICS')}
-                className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-[13px] font-medium transition-all active:scale-95 group cursor-pointer"
-              >
-                <span className="text-xs text-white/80">♫</span>
-                <span>Lyrics</span>
-                <ChevronRight className="w-3.5 h-3.5 text-white/40 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </div>
+            {/* Lyrics Link Chip — Live lyric preview if available, else ♫ Lyrics > */}
+            {(() => {
+              const previewText =
+                lyrics.length > 0
+                  ? (isSynced && activeLyricIndex >= 0
+                      ? lyrics[activeLyricIndex]?.words?.trim()
+                      : undefined) || lyrics.find((l) => l.words?.trim())?.words?.trim()
+                  : undefined;
+
+              return (
+                <div className="w-full flex items-center justify-start mt-1 mb-1.5 min-w-0">
+                  <button
+                    onClick={() => setNowPlayingTab('LYRICS')}
+                    className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-[13px] font-medium transition-all active:scale-95 group cursor-pointer max-w-full min-w-0"
+                  >
+                    <span className="text-xs text-white/80 shrink-0">♫</span>
+                    <span className={`truncate ${previewText ? 'text-white/85 italic' : ''}`}>
+                      {previewText || 'Lyrics'}
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-white/40 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  </button>
+                </div>
+              );
+            })()}
           </div>
           </>
         )}
@@ -1007,7 +1122,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div
                   ref={lyricsContainerRef}
-                  onScroll={handleUserLyricsInteraction}
+                  onScroll={(e) => {
+                    handleUserLyricsInteraction();
+                    handleListScroll(e);
+                  }}
                   onTouchStart={handleUserLyricsInteraction}
                   onWheel={handleUserLyricsInteraction}
                   style={{
@@ -1036,15 +1154,14 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                         id={`lyric-line-${idx}`}
                         key={idx}
                         onClick={() => handleLyricClick(line, idx)}
-                        className={`text-xl sm:text-2xl font-extrabold cursor-pointer transition-all duration-300 leading-snug tracking-tight select-none ${
-                          isActive
-                            ? 'text-white scale-[1.04] origin-left drop-shadow-[0_0_24px_rgba(255,255,255,0.7)] py-2'
-                            : isPassed
+                        className={`text-xl sm:text-2xl font-extrabold cursor-pointer transition-all duration-300 leading-snug tracking-tight select-none ${isActive
+                          ? 'text-white scale-[1.04] origin-left drop-shadow-[0_0_24px_rgba(255,255,255,0.7)] py-2'
+                          : isPassed
                             ? 'text-white/35 hover:text-white/70 py-1'
                             : isSynced
-                            ? 'text-white/20 hover:text-white/60 py-1'
-                            : 'text-white/80 hover:text-white py-1'
-                        }`}
+                              ? 'text-white/20 hover:text-white/60 py-1'
+                              : 'text-white/80 hover:text-white py-1'
+                          }`}
                       >
                         {line.words}
                       </p>
@@ -1099,11 +1216,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.06] border border-white/[0.08]">
                 <button
                   onClick={() => setQueueSubTab('QUEUE')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    queueSubTab === 'QUEUE'
-                      ? 'bg-accent-red text-white shadow-md'
-                      : 'text-white/60 hover:text-white'
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${queueSubTab === 'QUEUE'
+                    ? 'bg-accent-red text-white shadow-md'
+                    : 'text-white/60 hover:text-white'
+                    }`}
                 >
                   <ListMusic className="w-3.5 h-3.5" />
                   <span>Queue ({queue.length})</span>
@@ -1111,11 +1227,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
 
                 <button
                   onClick={() => setQueueSubTab('RELATED')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    queueSubTab === 'RELATED'
-                      ? 'bg-accent-red text-white shadow-md'
-                      : 'text-white/60 hover:text-white'
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${queueSubTab === 'RELATED'
+                    ? 'bg-accent-red text-white shadow-md'
+                    : 'text-white/60 hover:text-white'
+                    }`}
                 >
                   <Radio className="w-3.5 h-3.5" />
                   <span>Related Music</span>
@@ -1143,11 +1258,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                         }
                         setTimeout(() => setPlaybackModeFeedback(null), 1800);
                       }}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer active:scale-95 border ${
-                        repeatMode === 'ALL'
-                          ? 'bg-accent-red text-white border-accent-red shadow-sm'
-                          : 'bg-white/10 hover:bg-white/15 text-white/70 hover:text-white border-white/10'
-                      }`}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer active:scale-95 border ${repeatMode === 'ALL'
+                        ? 'bg-accent-red text-white border-accent-red shadow-sm'
+                        : 'bg-white/10 hover:bg-white/15 text-white/70 hover:text-white border-white/10'
+                        }`}
                       title={
                         repeatMode === 'ALL'
                           ? 'Queue Mode active: Playing queue tracks in order (Click for Autoplay)'
@@ -1183,7 +1297,11 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                 </div>
 
                 {/* Queue List */}
-                <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-1.5 py-1" data-scrollable>
+                <div
+                  onScroll={handleListScroll}
+                  className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-1.5 py-1"
+                  data-scrollable
+                >
                   {queue.map((item, idx) => {
                     const isCurrent = idx === queueIndex;
                     const isDragging = draggedIdx === idx;
@@ -1221,15 +1339,14 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                           setDraggedIdx(null);
                           setDragOverIdx(null);
                         }}
-                        className={`flex items-center justify-between p-2 rounded-2xl transition-all duration-150 group ${
-                          isDragging
-                            ? 'opacity-40 scale-[0.98] bg-white/10 border border-white/25'
-                            : isDragOver
+                        className={`flex items-center justify-between p-2 rounded-2xl transition-all duration-150 group ${isDragging
+                          ? 'opacity-40 scale-[0.98] bg-white/10 border border-white/25'
+                          : isDragOver
                             ? 'bg-white/[0.12] border border-accent-red/60 shadow-[0_0_14px_rgba(250,45,72,0.2)]'
                             : isCurrent
-                            ? 'bg-white/[0.14] border border-white/25 text-white font-semibold shadow-lg'
-                            : 'hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] text-white/70'
-                        }`}
+                              ? 'bg-white/[0.14] border border-white/25 text-white font-semibold shadow-lg'
+                              : 'hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] text-white/70'
+                          }`}
                       >
                         <div
                           onClick={() => playSong(item)}
@@ -1347,11 +1464,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                   {relatedSongs.length > 0 && (
                     <button
                       onClick={handleAddAllRelated}
-                      className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer active:scale-95 shrink-0 ${
-                        addedAllFeedback
-                          ? 'bg-green-500/25 text-green-300 border border-green-500/40'
-                          : 'bg-accent-red/20 text-accent-red hover:bg-accent-red hover:text-white border border-accent-red/30'
-                      }`}
+                      className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer active:scale-95 shrink-0 ${addedAllFeedback
+                        ? 'bg-green-500/25 text-green-300 border border-green-500/40'
+                        : 'bg-accent-red/20 text-accent-red hover:bg-accent-red hover:text-white border border-accent-red/30'
+                        }`}
                     >
                       {addedAllFeedback ? 'Added to Queue' : 'Add All to Queue'}
                     </button>
@@ -1428,11 +1544,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                             </button>
                             <button
                               onClick={() => handleAddRelatedToQueue(song)}
-                              className={`w-9 h-9 rounded-full transition-all cursor-pointer active:scale-90 flex items-center justify-center ${
-                                isAdded
-                                  ? 'bg-green-500/25 text-green-400 border border-green-500/40'
-                                  : 'bg-white/10 hover:bg-white/25 border border-white/10 text-white/80 hover:text-white'
-                              }`}
+                              className={`w-9 h-9 rounded-full transition-all cursor-pointer active:scale-90 flex items-center justify-center ${isAdded
+                                ? 'bg-green-500/25 text-green-400 border border-green-500/40'
+                                : 'bg-white/10 hover:bg-white/25 border border-white/10 text-white/80 hover:text-white'
+                                }`}
                               title={isAdded ? 'Added to queue' : 'Add to queue'}
                             >
                               {isAdded ? (
@@ -1457,250 +1572,256 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
           </div>
         )}
 
-        {/* 4. Scrubber Bar with Played & Remaining Time — Apple Music style with glowing thumb knob */}
-        <div className="w-full pt-2 pb-2 select-none">
-          {/* Expanded touch target wrapper */}
-          <div
-            ref={scrubberBarRef}
-            onPointerDown={handleSeekPointerDown}
-            className="w-full py-2.5 -my-2 cursor-pointer relative group flex items-center"
-          >
-            {/* The background track bar */}
-            <div className="w-full h-2 rounded-full bg-white/25 group-hover:bg-white/30 relative">
-              {/* Filled completed section (solid pure white) */}
-              <div
-                className="h-full rounded-full bg-white relative transition-[width] duration-75 ease-out"
-                style={{
-                  width: `${Math.min(100, Math.max(0, progressPercent))}%`,
-                }}
-              >
-                {/* Circular White Thumb Knob with Radiant Ambient Glow */}
+        {/* Collapsible bottom controls: hides extra volume/bottom buttons when scrolling Lyrics or Queue on mobile */}
+        <div
+          className={`transition-all duration-300 ease-out overflow-hidden ${!isDocked && nowPlayingTab !== 'PLAYER' && isListScrolled
+            ? 'max-h-0 opacity-0 pointer-events-none'
+            : 'max-h-[420px] opacity-100'
+            }`}
+        >
+          {/* 4. Scrubber Bar with Played & Remaining Time — Apple Music style with glowing thumb knob */}
+          <div className="w-full pt-2 pb-2 select-none">
+            {/* Expanded touch target wrapper */}
+            <div
+              ref={scrubberBarRef}
+              onPointerDown={handleSeekPointerDown}
+              className="w-full py-2.5 -my-2 cursor-pointer relative group flex items-center"
+            >
+              {/* The background track bar */}
+              <div className="w-full h-2 rounded-full bg-white/25 group-hover:bg-white/30 relative">
+                {/* Filled completed section (solid pure white) */}
                 <div
-                  className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.95),0_0_4px_rgba(255,255,255,0.8)] transition-transform duration-100 group-hover:scale-110 group-active:scale-125 pointer-events-none"
-                />
+                  className="h-full rounded-full bg-white relative transition-[width] duration-75 ease-out"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, progressPercent))}%`,
+                  }}
+                >
+                  {/* Circular White Thumb Knob with Radiant Ambient Glow */}
+                  <div
+                    className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.95),0_0_4px_rgba(255,255,255,0.8)] transition-transform duration-100 group-hover:scale-110 group-active:scale-125 pointer-events-none"
+                  />
+                </div>
               </div>
+            </div>
+
+            {/* Time row: 0:29 on left, -3:18 on right */}
+            <div className="flex justify-between items-center text-[11px] sm:text-xs font-medium text-white/60 mt-1 px-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              <span>{formatTime(displayCurrentTime)}</span>
+              <span>{formatRemainingTime(duration - displayCurrentTime)}</span>
             </div>
           </div>
 
-          {/* Time row: 0:29 on left, -3:18 on right */}
-          <div className="flex justify-between items-center text-[11px] sm:text-xs font-medium text-white/60 mt-1 px-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            <span>{formatTime(displayCurrentTime)}</span>
-            <span>{formatRemainingTime(duration - displayCurrentTime)}</span>
-          </div>
-        </div>
-
-        {/* 5. Main Playback Transport Controls — Modern double-triangle rewind & fast-forward glyphs matching reference */}
-        <div className="flex items-center justify-center w-full py-2.5 sm:py-3 gap-12 sm:gap-16">
-          {/* Previous Track — Double Triangle Pointing Left (Rewind ◀◀) */}
-          <button
-            onClick={prev}
-            className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
-            title="Previous track"
-          >
-            <svg
-              viewBox="0 0 28 28"
-              className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
-              aria-hidden="true"
-            >
-              {/* Left Triangle */}
-              <path d="M13 6.2a1.2 1.2 0 0 0-1.85-1.01L2.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
-              {/* Right Triangle */}
-              <path d="M25 6.2a1.2 1.2 0 0 0-1.85-1.01L14.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
-            </svg>
-          </button>
-
-          {/* Play / Pause — Large Bold White Glyph with Smooth Rounded Bars / Triangle */}
-          <button
-            onClick={togglePlay}
-            className="text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? (
-              <svg
-                viewBox="0 0 28 28"
-                className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] shrink-0"
-                aria-hidden="true"
-              >
-                {/* Two smooth vertical rounded pill bars */}
-                <rect x="7" y="4" width="4.5" height="20" rx="2.25" />
-                <rect x="16.5" y="4" width="4.5" height="20" rx="2.25" />
-              </svg>
-            ) : (
-              <svg
-                viewBox="0 0 28 28"
-                className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] ml-1 shrink-0"
-                aria-hidden="true"
-              >
-                {/* Solid rounded play triangle */}
-                <path d="M7 4.5a1.6 1.6 0 0 1 2.45-1.36l13.5 8.14a1.6 1.6 0 0 1 0 2.72l-13.5 8.14A1.6 1.6 0 0 1 7 20.78V4.5z" />
-              </svg>
-            )}
-          </button>
-
-          {/* Next Track — Double Triangle Pointing Right (Fast Forward ▶▶) */}
-          <button
-            onClick={next}
-            className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
-            title="Next track"
-          >
-            <svg
-              viewBox="0 0 28 28"
-              className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
-              aria-hidden="true"
-            >
-              {/* Left Triangle */}
-              <path d="M3 6.2a1.2 1.2 0 0 1 1.85-1.01L13.8 13a1.2 1.2 0 0 1 0 2.02L4.85 22.81A1.2 1.2 0 0 1 3 21.8V6.2z" />
-              {/* Right Triangle */}
-              <path d="M15 6.2a1.2 1.2 0 0 1 1.85-1.01L25.8 13a1.2 1.2 0 0 1 0 2.02L16.85 22.81A1.2 1.2 0 0 1 15 21.8V6.2z" />
-            </svg>
-          </button>
-        </div>
-
-        {/* 6. Volume Slider Row */}
-        <div className="w-full flex items-center gap-3 px-1 py-2">
-          <button
-            onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
-            className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
-            title="Mute / Unmute"
-          >
-            {volume === 0 ? <VolumeX className="w-4.5 h-4.5" /> : <Volume1 className="w-4.5 h-4.5" />}
-          </button>
-
-          <div className="flex-1 relative flex items-center">
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={volume}
-              onChange={(e) => setVolume(parseFloat(e.target.value))}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-white/20 accent-white transition-all [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,255,255,0.6)]"
-              style={{
-                background: `linear-gradient(to right, #ffffff ${volume * 100}%, rgba(255,255,255,0.2) ${volume * 100}%)`,
-              }}
-              title="Volume"
-            />
-          </div>
-
-          <button
-            onClick={() => setVolume(1)}
-            className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
-            title="Max Volume"
-          >
-            <Volume2 className="w-4.5 h-4.5" />
-          </button>
-        </div>
-
-        {/* 7. Bottom 4 Action Buttons — Liquid Glass iOS 26 (Apple Music reference) */}
-        <div className="flex items-center justify-between w-full px-4 pt-2.5 pb-1.5">
-          {/* Button 1: Lyrics Toggle — Speech bubble icon */}
-          <button
-            onClick={() => setNowPlayingTab(nowPlayingTab === 'LYRICS' ? 'PLAYER' : 'LYRICS')}
-            className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'LYRICS'
-              ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
-              : 'text-white/70'
-              }`}
-            title="Synchronized Lyrics"
-          >
-            {/* Apple Music speech-bubble lyrics icon */}
-            <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              <path d="M8 9h8" />
-              <path d="M8 13h4" />
-            </svg>
-          </button>
-
-          {/* Button 2: Infinity / Repeat Mode Pill — wider pill shape */}
-          <div className="relative flex items-center justify-center">
+          {/* 5. Main Playback Transport Controls — Modern double-triangle rewind & fast-forward glyphs matching reference */}
+          <div className="flex items-center justify-center w-full py-2.5 sm:py-3 gap-12 sm:gap-16">
+            {/* Previous Track — Double Triangle Pointing Left (Rewind ◀◀) */}
             <button
-              onClick={handleCyclePlaybackMode}
-              className={`liquid-glass-btn-pill w-16 h-10 sm:w-[72px] sm:h-11 ${
-                autoplay || repeatMode !== 'OFF'
-                  ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
-                  : 'text-white/50'
-              }`}
-              title={
-                autoplay
-                  ? 'Default: Playing Related Autoplay (Click for Queue Mode)'
-                  : repeatMode === 'ALL'
-                  ? 'Queue Mode: Playing Queue Songs (Click to repeat track)'
-                  : repeatMode === 'ONE'
-                  ? 'Loop: Repeat One Track (Click to turn off)'
-                  : 'Playback: Normal (Click for Autoplay)'
-              }
+              onClick={prev}
+              className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
+              title="Previous track"
             >
-              {autoplay ? (
-                <Infinity className="w-6 h-6 stroke-[2.2]" />
-              ) : repeatMode === 'ALL' ? (
-                <Repeat className="w-5 h-5 stroke-[2.2]" />
-              ) : repeatMode === 'ONE' ? (
-                <Repeat1 className="w-5 h-5 stroke-[2.2]" />
+              <svg
+                viewBox="0 0 28 28"
+                className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
+                aria-hidden="true"
+              >
+                {/* Left Triangle */}
+                <path d="M13 6.2a1.2 1.2 0 0 0-1.85-1.01L2.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
+                {/* Right Triangle */}
+                <path d="M25 6.2a1.2 1.2 0 0 0-1.85-1.01L14.2 13a1.2 1.2 0 0 0 0 2.02l8.95 7.79a1.2 1.2 0 0 0 1.85-1.01V6.2z" />
+              </svg>
+            </button>
+
+            {/* Play / Pause — Large Bold White Glyph with Smooth Rounded Bars / Triangle */}
+            <button
+              onClick={togglePlay}
+              className="text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <svg
+                  viewBox="0 0 28 28"
+                  className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] shrink-0"
+                  aria-hidden="true"
+                >
+                  {/* Two smooth vertical rounded pill bars */}
+                  <rect x="7" y="4" width="4.5" height="20" rx="2.25" />
+                  <rect x="16.5" y="4" width="4.5" height="20" rx="2.25" />
+                </svg>
               ) : (
-                <Infinity className="w-6 h-6 stroke-[2.2] opacity-50" />
+                <svg
+                  viewBox="0 0 28 28"
+                  className="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] fill-white drop-shadow-[0_0_24px_rgba(255,255,255,0.4)] ml-1 shrink-0"
+                  aria-hidden="true"
+                >
+                  {/* Solid rounded play triangle */}
+                  <path d="M7 4.5a1.6 1.6 0 0 1 2.45-1.36l13.5 8.14a1.6 1.6 0 0 1 0 2.72l-13.5 8.14A1.6 1.6 0 0 1 7 20.78V4.5z" />
+                </svg>
               )}
             </button>
 
-            {/* Quick Feedback Toast for Playback Mode */}
-            {playbackModeFeedback && (
-              <div className="absolute -top-10 px-3 py-1 rounded-full bg-black/85 backdrop-blur-xl border border-white/20 text-white text-[11px] font-semibold whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 shadow-xl pointer-events-none">
-                {playbackModeFeedback}
-              </div>
-            )}
+            {/* Next Track — Double Triangle Pointing Right (Fast Forward ▶▶) */}
+            <button
+              onClick={next}
+              className="p-2 text-white active:scale-85 transition-all duration-150 cursor-pointer flex items-center justify-center shrink-0"
+              title="Next track"
+            >
+              <svg
+                viewBox="0 0 28 28"
+                className="w-8 h-8 sm:w-9 sm:h-9 fill-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)] shrink-0"
+                aria-hidden="true"
+              >
+                {/* Left Triangle */}
+                <path d="M3 6.2a1.2 1.2 0 0 1 1.85-1.01L13.8 13a1.2 1.2 0 0 1 0 2.02L4.85 22.81A1.2 1.2 0 0 1 3 21.8V6.2z" />
+                {/* Right Triangle */}
+                <path d="M15 6.2a1.2 1.2 0 0 1 1.85-1.01L25.8 13a1.2 1.2 0 0 1 0 2.02L16.85 22.81A1.2 1.2 0 0 1 15 21.8V6.2z" />
+              </svg>
+            </button>
           </div>
 
-          {/* Button 3: Download — Arrow down to line icon */}
-          <button
-            onClick={handleDirectDownload}
-            disabled={isDownloading}
-            className={`liquid-glass-btn-icon w-12 h-12 ${
-              downloadStatus === 'SUCCESS' || isDownloaded
+          {/* 6. Volume Slider Row */}
+          <div className="w-full flex items-center gap-3 px-1 py-2">
+            <button
+              onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
+              className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Mute / Unmute"
+            >
+              {volume === 0 ? <VolumeX className="w-4.5 h-4.5" /> : <Volume1 className="w-4.5 h-4.5" />}
+            </button>
+
+            <div className="flex-1 relative flex items-center">
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-white/20 accent-white transition-all [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                style={{
+                  background: `linear-gradient(to right, #ffffff ${volume * 100}%, rgba(255,255,255,0.2) ${volume * 100}%)`,
+                }}
+                title="Volume"
+              />
+            </div>
+
+            <button
+              onClick={() => setVolume(1)}
+              className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Max Volume"
+            >
+              <Volume2 className="w-4.5 h-4.5" />
+            </button>
+          </div>
+
+          {/* 7. Bottom 4 Action Buttons — Liquid Glass iOS 26 (Apple Music reference) */}
+          <div className="flex items-center justify-between w-full px-4 pt-2.5 pb-1.5">
+            {/* Button 1: Lyrics Toggle — Speech bubble icon */}
+            <button
+              onClick={() => setNowPlayingTab(nowPlayingTab === 'LYRICS' ? 'PLAYER' : 'LYRICS')}
+              className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'LYRICS'
+                ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
+                : 'text-white/70'
+                }`}
+              title="Synchronized Lyrics"
+            >
+              {/* Apple Music speech-bubble lyrics icon */}
+              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <path d="M8 9h8" />
+                <path d="M8 13h4" />
+              </svg>
+            </button>
+
+            {/* Button 2: Infinity / Repeat Mode Pill — wider pill shape */}
+            <div className="relative flex items-center justify-center">
+              <button
+                onClick={handleCyclePlaybackMode}
+                className={`liquid-glass-btn-pill w-16 h-10 sm:w-[72px] sm:h-11 ${autoplay || repeatMode !== 'OFF'
+                  ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
+                  : 'text-white/50'
+                  }`}
+                title={
+                  autoplay
+                    ? 'Default: Playing Related Autoplay (Click for Queue Mode)'
+                    : repeatMode === 'ALL'
+                      ? 'Queue Mode: Playing Queue Songs (Click to repeat track)'
+                      : repeatMode === 'ONE'
+                        ? 'Loop: Repeat One Track (Click to turn off)'
+                        : 'Playback: Normal (Click for Autoplay)'
+                }
+              >
+                {autoplay ? (
+                  <Infinity className="w-6 h-6 stroke-[2.2]" />
+                ) : repeatMode === 'ALL' ? (
+                  <Repeat className="w-5 h-5 stroke-[2.2]" />
+                ) : repeatMode === 'ONE' ? (
+                  <Repeat1 className="w-5 h-5 stroke-[2.2]" />
+                ) : (
+                  <Infinity className="w-6 h-6 stroke-[2.2] opacity-50" />
+                )}
+              </button>
+
+              {/* Quick Feedback Toast for Playback Mode */}
+              {playbackModeFeedback && (
+                <div className="absolute -top-10 px-3 py-1 rounded-full bg-black/85 backdrop-blur-xl border border-white/20 text-white text-[11px] font-semibold whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 shadow-xl pointer-events-none">
+                  {playbackModeFeedback}
+                </div>
+              )}
+            </div>
+
+            {/* Button 3: Download — Arrow down to line icon */}
+            <button
+              onClick={handleDirectDownload}
+              disabled={isDownloading}
+              className={`liquid-glass-btn-icon w-12 h-12 ${downloadStatus === 'SUCCESS' || isDownloaded
                 ? '!bg-white/30 !border-white/40 !text-white'
                 : isDownloading
-                ? 'text-white'
-                : 'text-white/70'
-            }`}
-            title={
-              isDownloading
-                ? 'Downloading high-quality audio file...'
-                : downloadStatus === 'SUCCESS'
-                ? 'Downloaded!'
-                : isDownloaded
-                ? 'Re-download direct file (320kbps)'
-                : 'Direct file download (320kbps high quality)'
-            }
-          >
-            {isDownloading ? (
-              <Loader2 className="w-[22px] h-[22px] animate-spin stroke-[2]" />
-            ) : downloadStatus === 'SUCCESS' || isDownloaded ? (
-              <Check className="w-[22px] h-[22px] stroke-[2.5]" />
-            ) : (
-              /* Apple Music download arrow icon */
-              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3v12" />
-                <path d="M8 12l4 4 4-4" />
-                <path d="M4 20h16" />
-              </svg>
-            )}
-          </button>
+                  ? 'text-white'
+                  : 'text-white/70'
+                }`}
+              title={
+                isDownloading
+                  ? 'Downloading high-quality audio file...'
+                  : downloadStatus === 'SUCCESS'
+                    ? 'Downloaded!'
+                    : isDownloaded
+                      ? 'Re-download direct file (320kbps)'
+                      : 'Direct file download (320kbps high quality)'
+              }
+            >
+              {isDownloading ? (
+                <Loader2 className="w-[22px] h-[22px] animate-spin stroke-[2]" />
+              ) : downloadStatus === 'SUCCESS' || isDownloaded ? (
+                <Check className="w-[22px] h-[22px] stroke-[2.5]" />
+              ) : (
+                /* Apple Music download arrow icon */
+                <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12" />
+                  <path d="M8 12l4 4 4-4" />
+                  <path d="M4 20h16" />
+                </svg>
+              )}
+            </button>
 
-          {/* Button 4: Queue / Up Next — List with music note icon */}
-          <button
-            onClick={() => setNowPlayingTab(nowPlayingTab === 'QUEUE' ? 'PLAYER' : 'QUEUE')}
-            className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'QUEUE'
-              ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
-              : 'text-white/70'
-              }`}
-            title="Up Next Queue"
-          >
-            {/* Apple Music queue/playlist icon */}
-            <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h14" />
-              <path d="M3 12h14" />
-              <path d="M3 18h10" />
-              <path d="M19 15v6" />
-              <path d="M22 18h-6" />
-            </svg>
-          </button>
+            {/* Button 4: Queue / Up Next — List with music note icon */}
+            <button
+              onClick={() => setNowPlayingTab(nowPlayingTab === 'QUEUE' ? 'PLAYER' : 'QUEUE')}
+              className={`liquid-glass-btn-icon w-12 h-12 ${nowPlayingTab === 'QUEUE'
+                ? '!bg-white/30 !border-white/40 text-white shadow-[0_0_12px_rgba(255,255,255,0.15)]'
+                : 'text-white/70'
+                }`}
+              title="Up Next Queue"
+            >
+              {/* Apple Music queue/playlist icon */}
+              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h14" />
+                <path d="M3 12h14" />
+                <path d="M3 18h10" />
+                <path d="M19 15v6" />
+                <path d="M22 18h-6" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1754,11 +1875,10 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                     <button
                       key={q.id}
                       onClick={() => setAudioQuality(q.id)}
-                      className={`py-1.5 px-1.5 rounded-lg text-center transition-all cursor-pointer border ${
-                        isActive
-                          ? 'bg-accent-red/25 text-white border-accent-red/50 shadow-sm font-bold'
-                          : 'bg-transparent text-white/55 hover:text-white hover:bg-white/[0.06] border-transparent text-xs font-medium'
-                      }`}
+                      className={`py-1.5 px-1.5 rounded-lg text-center transition-all cursor-pointer border ${isActive
+                        ? 'bg-accent-red/25 text-white border-accent-red/50 shadow-sm font-bold'
+                        : 'bg-transparent text-white/55 hover:text-white hover:bg-white/[0.06] border-transparent text-xs font-medium'
+                        }`}
                     >
                       <div className="text-xs leading-tight">{q.label}</div>
                       <div className={`text-[10px] mt-0.5 ${isActive ? 'text-white/80' : 'text-white/40'}`}>
@@ -1896,9 +2016,9 @@ export const NowPlayingScreen: React.FC<NowPlayingScreenProps> = ({
                       title: currentSong.title,
                       text: `Listening to ${currentSong.title} by ${currentSong.artist} on Znode Music`,
                       url: shareUrl,
-                    }).catch(() => {});
+                    }).catch(() => { });
                   } else if (navigator.clipboard) {
-                    navigator.clipboard.writeText(shareUrl).catch(() => {});
+                    navigator.clipboard.writeText(shareUrl).catch(() => { });
                   }
                 }}
                 className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:scale-[0.99] text-white/85 hover:text-white text-xs font-semibold transition-all text-left cursor-pointer group"
