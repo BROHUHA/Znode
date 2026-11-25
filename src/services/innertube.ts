@@ -793,44 +793,46 @@ export class InnertubeService {
    */
   public async resolveAudioStream(videoId: string): Promise<string> {
     const clients = [
-      { clientName: 'TVHTML5', clientVersion: '7.20260707.07.00' },
-      { clientName: 'ANDROID_MUSIC', clientVersion: '6.43.52' },
       { clientName: 'IOS', clientVersion: '19.45.4' },
+      { clientName: 'ANDROID_MUSIC', clientVersion: '6.43.52' },
+      { clientName: 'TVHTML5', clientVersion: '7.20260707.07.00' },
     ];
 
-    for (const c of clients) {
-      try {
-        const playerResponse = await this.post('player', {
-          videoId,
-          context: {
-            client: {
-              clientName: c.clientName,
-              clientVersion: c.clientVersion,
-              hl: 'en',
-              gl: 'US',
+    try {
+      const winner = await Promise.any(
+        clients.map(async (c) => {
+          const playerResponse = await this.post('player', {
+            videoId,
+            context: {
+              client: {
+                clientName: c.clientName,
+                clientVersion: c.clientVersion,
+                hl: 'en',
+                gl: 'US',
+              },
             },
-          },
-        });
+          });
 
-        const formats = [
-          ...(playerResponse?.streamingData?.adaptiveFormats || []),
-          ...(playerResponse?.streamingData?.formats || []),
-        ];
+          const formats = [
+            ...(playerResponse?.streamingData?.adaptiveFormats || []),
+            ...(playerResponse?.streamingData?.formats || []),
+          ];
 
-        const audioFormats = formats.filter(
-          (f: any) => f.mimeType?.startsWith('audio/') && typeof f.url === 'string' && f.url.startsWith('http')
-        );
-        audioFormats.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+          const audioFormats = formats.filter(
+            (f: any) => f.mimeType?.startsWith('audio/') && typeof f.url === 'string' && f.url.startsWith('http')
+          );
+          audioFormats.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
 
-        if (audioFormats.length > 0 && audioFormats[0].url) {
-          return audioFormats[0].url;
-        }
-      } catch (e) {
-        // Try next client
-      }
+          if (audioFormats.length > 0 && audioFormats[0].url) {
+            return audioFormats[0].url as string;
+          }
+          throw new Error('No audio format');
+        })
+      );
+      return winner || '';
+    } catch {
+      return '';
     }
-
-    return '';
   }
 
   // ---- Parsers ----

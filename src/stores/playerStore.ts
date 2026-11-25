@@ -11,7 +11,6 @@ import { innertubeService } from '../services/innertube';
 import { jioSaavnService } from '../services/jiosaavn';
 import { listenTogetherService } from '../services/listenTogether';
 import { parseDurationSec } from '../utils/trackMatcher';
-import { useSettingsStore } from './settingsStore';
 
 // High-speed stream cache for instant 0ms playback and gapless skipping
 const streamCache = new Map<string, string>();
@@ -46,26 +45,55 @@ function clearSleepInterval() {
 /**
  * Resolves and pre-downloads the upcoming track in advance for 0ms instant switching
  */
+async function resolveFastStream(song: Song, timeoutMs: number = 1500): Promise<string | undefined> {
+  const durationSec = parseDurationSec(song.durationText);
+  const saavnPromise = jioSaavnService
+    .findMatch(song.title, song.artist, durationSec)
+    .catch(() => null);
+  const ytPromise = innertubeService
+    .resolveAudioStream(song.videoId)
+    .catch(() => '');
+
+  const deadline = new Promise<undefined>((resolve) =>
+    setTimeout(() => resolve(undefined), timeoutMs)
+  );
+
+  // Prefer 320kbps JioSaavn CDN if it resolves quickly; otherwise take fastest YouTube audio stream
+  const raceWinner = (async (): Promise<string | undefined> => {
+    const first = await Promise.race([
+      saavnPromise.then((u) => ({ src: 'saavn' as const, url: u || '' })),
+      ytPromise.then((u) => ({ src: 'yt' as const, url: u || '' })),
+    ]);
+    if (first.src === 'saavn' && first.url) return first.url;
+    if (first.src === 'yt' && first.url) {
+      // Give JioSaavn up to 300ms extra to deliver 320kbps AAC before falling back to YouTube stream
+      const saavnGrace = await Promise.race([
+        saavnPromise,
+        new Promise<null>((r) => setTimeout(() => r(null), 300)),
+      ]);
+      return saavnGrace || first.url;
+    }
+    const second = first.src === 'saavn' ? await ytPromise : await saavnPromise;
+    return second || undefined;
+  })();
+
+  try {
+    return await Promise.race([raceWinner, deadline]);
+  } catch {
+    return undefined;
+  }
+}
+
 async function prepareUpcomingSong(song: Song) {
   if (!song) return;
 
   let streamUrl = streamCache.get(song.videoId);
   if (!streamUrl) {
     try {
-      const durationSec = parseDurationSec(song.durationText);
-      const quality = useSettingsStore.getState().audioQuality;
-
-      // When High/Lossless is selected, query verified JioSaavn CDN (320kbps AAC)
-      // Hard timeout prevents background preloading from hanging indefinitely
-      if (quality !== 'LOW') {
-        const saavnMatch = await Promise.race([
-          jioSaavnService.findMatch(song.title, song.artist, durationSec),
-          new Promise<null>((r) => setTimeout(() => r(null), 4000)),
-        ]);
-        if (saavnMatch && !saavnMatch.includes('googlevideo.com')) {
-          streamUrl = saavnMatch;
-          streamCache.set(song.videoId, saavnMatch);
-        }
+      const resolved = await resolveFastStream(song, 2500);
+      if (resolved) {
+        streamUrl = resolved;
+        streamCache.set(song.videoId, resolved);
       }
     } catch (e) {
       console.warn('Background advance stream resolution error:', e);
@@ -498,34 +526,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       if (!streamUrl) {
         try {
-          const durationSec = parseDurationSec(song.durationText);
-
-          // Always prefer native HTML5 <audio> (JioSaavn CDN or direct YouTube audio stream)
-          // so mobile Chrome keeps playing seamlessly in background / locked screen.
-          try {
-            const saavnMatch = await Promise.race([
-              jioSaavnService.findMatch(song.title, song.artist, durationSec),
-              new Promise<null>((r) => setTimeout(() => r(null), 3000)),
-            ]);
-            if (saavnMatch) {
-              streamUrl = saavnMatch;
-              streamCache.set(song.videoId, saavnMatch);
-            }
-          } catch (e) {
-            console.warn('JioSaavn match failed:', e);
-          }
-
-          if (!streamUrl) {
-            try {
-              const ytAudioUrl = await Promise.race([
-                innertubeService.resolveAudioStream(song.videoId),
-                new Promise<string>((r) => setTimeout(() => r(''), 2500)),
-              ]);
-              if (ytAudioUrl) {
-                streamUrl = ytAudioUrl;
-                streamCache.set(song.videoId, ytAudioUrl);
-              }
-            } catch {}
+          const resolved = await resolveFastStream(song, 1500);
+          if (resolved) {
+            streamUrl = resolved;
+            streamCache.set(song.videoId, resolved);
           }
         } catch (e) {
           console.warn('Stream resolution error:', e);
@@ -566,11 +570,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       if (requestId !== currentPlayRequestId) return;
 
-      // Safety timeout: if isPlaying hasn't become true within 15s, auto-advance
+      // Safety timeout: if isPlaying hasn't become true within 15s while foregrounded, auto-advance
       const playbackSongId = song.videoId;
       playbackTimeoutHandle = setTimeout(() => {
         const state = get();
-        if (!state.isPlaying && state.currentSong?.videoId === playbackSongId) {
+        const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+        if (
+          isVisible &&
+          !state.isPlaying &&
+          audioEngine.isPaused &&
+          state.currentSong?.videoId === playbackSongId
+        ) {
           console.warn('Playback timeout: song did not start within 15s, auto-advancing:', song.title);
           streamCache.delete(playbackSongId);
           state.next();

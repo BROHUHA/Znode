@@ -323,7 +323,9 @@ export class AudioEngine {
               const pendingStart = this.ytPendingStartTime;
               this.ytPendingVideoId = null;
               this.ytPendingStartTime = 0;
-              this.playVideo(pendingId, pendingStart);
+              if (this.mode === 'YOUTUBE' && this.currentPlayingVideoId === pendingId) {
+                this.playVideo(pendingId, pendingStart);
+              }
             }
           },
           onStateChange: (event: any) => {
@@ -411,7 +413,10 @@ export class AudioEngine {
 
     if (!fromCrossfade) {
       this.cancelCrossfade();
+      this.stopInactivePlayers('YOUTUBE');
     } else {
+      this.directAudio.pause();
+      this.directAudio.removeAttribute('src');
       // Stop any previous YT fade-out timer since we are reusing the single YT player
       if (this.ytFadeOutTimer) {
         clearInterval(this.ytFadeOutTimer);
@@ -734,7 +739,7 @@ export class AudioEngine {
     });
 
     deck.addEventListener('error', (e) => {
-      if (this.mode === 'HTML5' && this.activeDeckIndex === deckIndex) {
+      if (this.mode === 'HTML5' && this.activeDeckIndex === deckIndex && deck.getAttribute('src')) {
         console.warn('HTML5 audio error event triggered:', e);
         this.stopStallDetector();
         // Auto-recover: switch to YouTube IFrame player for the same videoId
@@ -744,6 +749,24 @@ export class AudioEngine {
         }
       }
     });
+  }
+
+  private stopInactivePlayers(keep?: 0 | 1 | 'DIRECT' | 'YOUTUBE') {
+    for (const idx of [0, 1] as const) {
+      if (keep !== idx) {
+        this.decks[idx].pause();
+        this.decks[idx].removeAttribute('src');
+      }
+    }
+    if (keep !== 'DIRECT') {
+      this.directAudio.pause();
+      this.directAudio.removeAttribute('src');
+    }
+    if (keep !== 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+      try {
+        this.ytPlayer.pauseVideo();
+      } catch {}
+    }
   }
 
   /**
@@ -759,6 +782,11 @@ export class AudioEngine {
 
     this.stallDetectorHandle = setInterval(() => {
       if (this.mode !== 'HTML5' || this.audio.paused) return;
+      // Do not false-trigger stall recovery in background tabs where timers/timeupdate are throttled
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        this.lastTimeUpdateAt = Date.now();
+        return;
+      }
 
       const timeSinceUpdate = Date.now() - this.lastTimeUpdateAt;
       const timeAdvanced = Math.abs(this.audio.currentTime - this.lastTimeUpdateValue) > 0.1;
@@ -794,20 +822,29 @@ export class AudioEngine {
    */
   public preloadNextTrack(streamUrl?: string | null, videoId?: string | null): void {
     if (streamUrl) {
-      if (this.preloadedStreamUrl === streamUrl && this.preloadedReady) {
+      const isLocalhost = typeof window !== 'undefined' && window.location.hostname.includes('localhost');
+      if (streamUrl.includes('googlevideo.com') && isLocalhost) {
+        this.preloadedVideoId = videoId || null;
         return;
       }
-      this.preloadedStreamUrl = streamUrl;
+      const effectiveUrl = streamUrl.includes('googlevideo.com')
+        ? `/api/stream?url=${encodeURIComponent(streamUrl)}`
+        : streamUrl;
+
+      if (this.preloadedStreamUrl === effectiveUrl && this.preloadedReady) {
+        return;
+      }
+      this.preloadedStreamUrl = effectiveUrl;
       this.preloadedVideoId = videoId || null;
       this.preloadedReady = false;
 
       try {
-        this.preloadAudio.src = streamUrl;
+        this.preloadAudio.src = effectiveUrl;
         this.preloadAudio.load();
 
         // Range request for first 1MB ensures the browser disk/memory cache stores the media chunks in advance
         if (typeof fetch !== 'undefined') {
-          fetch(streamUrl, {
+          fetch(effectiveUrl, {
             headers: { Range: 'bytes=0-1048576' },
             mode: 'cors',
           }).catch(() => {});
@@ -898,11 +935,7 @@ export class AudioEngine {
 
     if (!fromCrossfade) {
       this.cancelCrossfade();
-      if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-        try {
-          this.ytPlayer.pauseVideo();
-        } catch {}
-      }
+      this.stopInactivePlayers(this.activeDeckIndex);
     } else {
       // If crossfading from HTML5, switch to the OTHER deck so the outgoing deck finishes fading out
       if (this.fadeOutDeckIndex !== null) {
@@ -916,9 +949,17 @@ export class AudioEngine {
       }
     }
 
-    this.initAudioContext();
-    if (this.ctx && this.ctx.state === 'suspended') {
-      await this.ctx.resume().catch(() => {});
+    // Only attach Web Audio API AudioContext when DSP (EQ or Tone Pad) is actually non-flat.
+    // Pure native <audio> without createMediaElementSource never gets suspended by Chrome Android in background!
+    const needsDsp =
+      this.currentEqGains.some((g) => g !== 0) ||
+      this.currentToneX !== 0 ||
+      this.currentToneY !== 0;
+    if (needsDsp) {
+      this.initAudioContext();
+      if (this.ctx && this.ctx.state === 'suspended') {
+        await this.ctx.resume().catch(() => {});
+      }
     }
 
     if (gen !== this.playGeneration) return;
@@ -928,7 +969,7 @@ export class AudioEngine {
 
     try {
       // If preloaded in advance, audio chunks are already in cache
-      if (this.preloadedStreamUrl === streamUrl) {
+      if (this.preloadedStreamUrl === effectiveUrl) {
         this.preloadAudio.pause();
         this.preloadAudio.removeAttribute('src');
       }
