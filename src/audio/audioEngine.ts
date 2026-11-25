@@ -51,6 +51,7 @@ export class AudioEngine {
   private hasStartedYtFadeOut: boolean = false;
   private isCrossfadingOut: boolean = false;
   private fadeOutTimer: any = null;
+  private fadeInTimer: any = null;
   private fadeOutDeckIndex: 0 | 1 | null = null;
   private ytFadeOutTimer: any = null;
   private playGeneration: number = 0;
@@ -334,9 +335,14 @@ export class AudioEngine {
 
             // YT.PlayerState: PLAYING = 1, ENDED = 0, PAUSED = 2, BUFFERING = 3
             if (event.data === 1) {
+              const loadedId = this.ytPlayer.getVideoData?.()?.video_id;
+              if (this.mode !== 'YOUTUBE' || (loadedId && this.currentPlayingVideoId && loadedId !== this.currentPlayingVideoId)) {
+                return;
+              }
               this.isLoadingNewVideo = false;
               if (!this.isAdMuted) {
                 try {
+                  this.ytPlayer.unMute();
                   // Strictly enforce 1.0x normal speed (prevents persistent 2x speed)
                   if (typeof this.ytPlayer.getPlaybackRate === 'function' && this.ytPlayer.getPlaybackRate() !== 1) {
                     this.ytPlayer.setPlaybackRate(1);
@@ -409,6 +415,7 @@ export class AudioEngine {
     this.hasStartedYtFadeOut = false;
     this.isCrossfadingOut = false;
     this.isLoadingNewVideo = true;
+    this.stopTicker();
     this.stopStallDetector();
 
     if (!fromCrossfade) {
@@ -468,9 +475,11 @@ export class AudioEngine {
     if (gen !== this.playGeneration) return;
 
     try {
-      this.ytPlayer.unMute();
-      // Always start at full target volume immediately (no fade-in)
-      this.ytPlayer.setVolume(Math.round(this.currentVolume * 100));
+      // Mute & pause old buffer before loading new video to eliminate startup audio bleed
+      this.ytPlayer.mute();
+      if (typeof this.ytPlayer.stopVideo === 'function') {
+        this.ytPlayer.stopVideo();
+      }
       // Reset playback speed to 1.0x on every video load
       try {
         this.ytPlayer.setPlaybackRate?.(1);
@@ -488,18 +497,24 @@ export class AudioEngine {
   private startTicker() {
     this.stopTicker();
     this.ytTicker = setInterval(() => {
+      if (this.mode !== 'YOUTUBE' || this.isLoadingNewVideo) return;
+
       // Continuous Ad Guard Check
       this.checkAndSkipAds();
 
       if (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
+        const loadedId = this.ytPlayer.getVideoData?.()?.video_id;
+        if (loadedId && this.currentPlayingVideoId && loadedId !== this.currentPlayingVideoId) {
+          return;
+        }
         const cur = this.ytPlayer.getCurrentTime() || 0;
         const dur = this.ytPlayer.getDuration() || 0;
         if (this.onTimeUpdateCallback && !this.isAdMuted) {
           this.onTimeUpdateCallback(cur, dur);
         }
 
-        // Crossfade blend trigger when approaching track end (skip when Repeat One is active)
-        if (!this.repeatOne && this.crossfadeDuration > 0 && dur > 10 && cur > 0 && !this.isAdMuted) {
+        // Crossfade blend trigger when approaching track end (skip when Repeat One is active or first 5s)
+        if (!this.repeatOne && this.crossfadeDuration > 0 && dur > 10 && cur > 5 && !this.isAdMuted) {
           const remaining = dur - cur;
           if (remaining <= this.crossfadeDuration && remaining > 0.4 && !this.hasStartedYtFadeOut) {
             this.hasStartedYtFadeOut = true;
@@ -521,6 +536,7 @@ export class AudioEngine {
    * Suppresses ads instantly, seeks to finish them, and restores user audio.
    */
   private checkAndSkipAds(): void {
+    if (this.mode !== 'YOUTUBE' || this.isLoadingNewVideo) return;
     if (!this.ytPlayer || typeof this.ytPlayer.getVideoData !== 'function') return;
 
     try {
@@ -676,8 +692,8 @@ export class AudioEngine {
           this.onTimeUpdateCallback(cur, dur);
         }
 
-        // Crossfade blend trigger when approaching track end (skip when Repeat One is active)
-        if (!this.repeatOne && this.crossfadeDuration > 0 && dur > 10 && cur > 0) {
+        // Crossfade blend trigger when approaching track end (skip when Repeat One is active or first 5s)
+        if (!this.repeatOne && this.crossfadeDuration > 0 && dur > 10 && cur > 5) {
           const remaining = dur - cur;
           if (remaining <= this.crossfadeDuration && remaining > 0.4 && !this.hasTriggeredCrossfade) {
             this.hasTriggeredCrossfade = true;
@@ -765,6 +781,7 @@ export class AudioEngine {
     }
     if (keep !== 'YOUTUBE' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       try {
+        this.ytPlayer.mute?.();
         this.ytPlayer.pauseVideo();
       } catch {}
     }
@@ -995,14 +1012,17 @@ export class AudioEngine {
         this.preloadAudio.removeAttribute('src');
       }
 
+      const shouldFadeIn = fromCrossfade && !isHidden && this.crossfadeDuration > 0;
+
       if (deckGain && this.ctx) {
         deckGain.gain.cancelScheduledValues(this.ctx.currentTime);
-        deckGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+        deckGain.gain.setValueAtTime(shouldFadeIn ? 0.01 : 1.0, this.ctx.currentTime);
       }
 
+      // Pause and reset deck before swapping src to prevent stale buffer pop/noise
+      deck.pause();
       deck.src = effectiveUrl;
-      // Always start at full target volume immediately (no fade-in)
-      deck.volume = this.currentVolume;
+      deck.volume = shouldFadeIn && !(deckGain && this.ctx) ? 0 : this.currentVolume;
       deck.playbackRate = 1.0;
       deck.defaultPlaybackRate = 1.0;
       deck.currentTime = startTime;
@@ -1011,6 +1031,10 @@ export class AudioEngine {
       if (gen !== this.playGeneration) {
         deck.pause();
         return;
+      }
+
+      if (shouldFadeIn) {
+        this.startHtml5FadeIn(this.activeDeckIndex, Math.min(this.crossfadeDuration, 3));
       }
 
       this.startStallDetector();
@@ -1097,7 +1121,7 @@ export class AudioEngine {
       } catch {}
     } else if (this.mode === 'DIRECT') {
       this.directAudio.volume = clamped;
-    } else {
+    } else if (!this.fadeInTimer) {
       this.audio.volume = clamped;
     }
   }
@@ -1204,6 +1228,10 @@ export class AudioEngine {
 
   public cancelCrossfade(): void {
     this.isCrossfadingOut = false;
+    if (this.fadeInTimer) {
+      clearInterval(this.fadeInTimer);
+      this.fadeInTimer = null;
+    }
     if (this.fadeOutTimer) {
       clearInterval(this.fadeOutTimer);
       this.fadeOutTimer = null;
@@ -1229,6 +1257,41 @@ export class AudioEngine {
         } catch {}
       }
     }
+  }
+
+  private startHtml5FadeIn(deckIndex: 0 | 1, durationSec: number): void {
+    if (this.fadeInTimer) {
+      clearInterval(this.fadeInTimer);
+      this.fadeInTimer = null;
+    }
+    const deck = this.decks[deckIndex];
+    const deckGain = this.deckGainNodes[deckIndex];
+    const steps = 20;
+    const interval = Math.max(25, (durationSec * 1000) / steps);
+    let step = 0;
+
+    this.fadeInTimer = setInterval(() => {
+      step++;
+      const ratio = Math.min(1, step / steps);
+      // Equal-power-like smooth curve complementing fade-out
+      const curved = Math.sin((ratio * Math.PI) / 2);
+      if (deckGain && this.ctx) {
+        deckGain.gain.setValueAtTime(Math.max(0.01, curved), this.ctx.currentTime);
+      } else {
+        deck.volume = Math.max(0, Math.min(1, this.currentVolume * curved));
+      }
+
+      if (step >= steps) {
+        clearInterval(this.fadeInTimer);
+        this.fadeInTimer = null;
+        if (this.activeDeckIndex === deckIndex && this.mode === 'HTML5') {
+          deck.volume = this.currentVolume;
+          if (deckGain && this.ctx) {
+            deckGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+          }
+        }
+      }
+    }, interval);
   }
 
   private startHtml5CrossfadeOut(deckIndex: 0 | 1, durationSec: number): void {
