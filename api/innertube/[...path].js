@@ -40,14 +40,34 @@ export default async function handler(req, res) {
       parsedBody = req.body;
     }
 
+    const bodyClientName = parsedBody?.context?.client?.clientName;
+    const bodyClientVersion = parsedBody?.context?.client?.clientVersion;
+
+    let forwardUserAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36';
+    let forwardClientName = isTvClient ? '31' : '67';
+    let forwardClientVersion = isTvClient ? '7.20260707.07.00' : '1.20250101.01.00';
+
+    if (bodyClientName === 'IOS') {
+      forwardClientName = '5';
+      forwardClientVersion = bodyClientVersion || '19.45.4';
+      forwardUserAgent = `com.google.ios.youtube/${forwardClientVersion} (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)`;
+    } else if (bodyClientName === 'ANDROID_MUSIC') {
+      forwardClientName = '21';
+      forwardClientVersion = bodyClientVersion || '6.43.52';
+      forwardUserAgent = `com.google.android.apps.youtube.music/${forwardClientVersion} (Linux; U; Android 14)`;
+    } else if (bodyClientName === 'TVHTML5') {
+      forwardClientName = '7';
+      forwardClientVersion = bodyClientVersion || '7.20260707.07.00';
+    }
+
     const forwardHeaders = {
       'Content-Type': 'application/json',
       'Origin': 'https://music.youtube.com',
       'Referer': 'https://music.youtube.com/',
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-      'X-YouTube-Client-Name': isTvClient ? '31' : '67',
-      'X-YouTube-Client-Version': isTvClient ? '7.20260707.07.00' : '1.20250101.01.00',
+      'User-Agent': forwardUserAgent,
+      'X-YouTube-Client-Name': forwardClientName,
+      'X-YouTube-Client-Version': forwardClientVersion,
     };
 
     if (authHeader) forwardHeaders['Authorization'] = authHeader;

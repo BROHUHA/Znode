@@ -60,8 +60,12 @@ export const useSettingsStore = create<SettingsState>((set) => {
 
   // Apply default crossfade & initial DSP settings to engine
   audioEngine.setCrossfadeDuration(savedCrossfade);
-  savedGains.forEach((g, idx) => audioEngine.setEqGain(idx, g));
-  audioEngine.setTonePad(savedToneX, savedToneY);
+  if (savedGains.some((g) => g !== 0)) {
+    savedGains.forEach((g, idx) => audioEngine.setEqGain(idx, g));
+  }
+  if (savedToneX !== 0 || savedToneY !== 0) {
+    audioEngine.setTonePad(savedToneX, savedToneY);
+  }
 
   return {
     themeMode: (getStorage('theme') as any) || 'DARK',

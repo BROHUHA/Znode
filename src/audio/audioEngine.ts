@@ -1093,8 +1093,17 @@ export class AudioEngine {
     return this.crossfadeDuration;
   }
 
+  private hasActiveDsp(): boolean {
+    return (
+      this.currentEqGains.some((g) => g !== 0) ||
+      this.currentToneX !== 0 ||
+      this.currentToneY !== 0
+    );
+  }
+
   public setEqGain(bandIndex: number, gainDb: number): void {
     this.currentEqGains[bandIndex] = gainDb;
+    if (!this.hasActiveDsp() && !this.ctx) return;
     this.initAudioContext();
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
@@ -1106,6 +1115,10 @@ export class AudioEngine {
   }
 
   public applyEqPreset(preset: EqualizerPreset): void {
+    preset.gains.forEach((gain, idx) => {
+      this.currentEqGains[idx] = gain;
+    });
+    if (!this.hasActiveDsp() && !this.ctx) return;
     this.initAudioContext();
     preset.gains.forEach((gain, idx) => {
       this.setEqGain(idx, gain);
@@ -1115,6 +1128,7 @@ export class AudioEngine {
   public setTonePad(toneX: number, toneY: number): void {
     this.currentToneX = toneX;
     this.currentToneY = toneY;
+    if (!this.hasActiveDsp() && !this.ctx) return;
     this.initAudioContext();
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
