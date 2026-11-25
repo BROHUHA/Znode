@@ -57,6 +57,7 @@ export class AudioEngine {
   private isLoadingNewVideo: boolean = false;
   private intendedPlaying: boolean = false;
   private lastMediaPosUpdate: number = 0;
+  private hasUnlockedDecks: boolean = false;
 
   private get audio(): HTMLAudioElement {
     return this.decks[this.activeDeckIndex];
@@ -101,7 +102,6 @@ export class AudioEngine {
     const createDeck = () => {
       const el = new Audio();
       el.preload = 'auto';
-      el.crossOrigin = 'anonymous'; // Essential for Web Audio API DSP pipeline
       el.playbackRate = 1.0;
       el.defaultPlaybackRate = 1.0;
       (el as any).preservesPitch = true;
@@ -643,6 +643,7 @@ export class AudioEngine {
       const eqEntryNode = this.eqFilters[0] || this.gainNode;
 
       for (const idx of [0, 1] as const) {
+        this.decks[idx].crossOrigin = 'anonymous';
         if (!this.deckGainNodes[idx]) {
           const dg = this.ctx.createGain();
           dg.gain.value = 1.0;
@@ -933,11 +934,12 @@ export class AudioEngine {
     this.stopTicker();
     this.stallRecoveryAttempted = false;
 
-    if (!fromCrossfade) {
+    const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (!fromCrossfade || isHidden) {
       this.cancelCrossfade();
       this.stopInactivePlayers(this.activeDeckIndex);
     } else {
-      // If crossfading from HTML5, switch to the OTHER deck so the outgoing deck finishes fading out
+      // If crossfading from HTML5 in foreground, switch to the OTHER deck so the outgoing deck finishes fading out
       if (this.fadeOutDeckIndex !== null) {
         this.activeDeckIndex = this.fadeOutDeckIndex === 0 ? 1 : 0;
       }
@@ -947,6 +949,25 @@ export class AudioEngine {
           this.ytPlayer.pauseVideo();
         } catch {}
       }
+    }
+
+    // Unlock secondary deck during foreground user gesture so mobile Chrome/iOS allows background track switches
+    if (!this.hasUnlockedDecks && !isHidden) {
+      this.hasUnlockedDecks = true;
+      const otherDeck = this.decks[this.activeDeckIndex === 0 ? 1 : 0];
+      const silentWav = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+      try {
+        otherDeck.muted = true;
+        otherDeck.src = silentWav;
+        otherDeck.play().then(() => {
+          otherDeck.pause();
+          otherDeck.removeAttribute('src');
+          otherDeck.muted = false;
+        }).catch(() => {
+          otherDeck.removeAttribute('src');
+          otherDeck.muted = false;
+        });
+      } catch {}
     }
 
     // Only attach Web Audio API AudioContext when DSP (EQ or Tone Pad) is actually non-flat.
