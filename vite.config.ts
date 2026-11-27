@@ -349,8 +349,26 @@ function autoAuthPlugin(): Plugin {
 }
 
 // https://vitejs.dev/config/
+function metaOriginPlugin(): Plugin {
+  const rawOrigin =
+    process.env.SITE_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://znode-music.vercel.app');
+  const siteOrigin = rawOrigin.replace(/\/+$/, '');
+
+  return {
+    name: 'meta-origin-injector',
+    transformIndexHtml(html) {
+      return html.replace(/__SITE_ORIGIN__/g, siteOrigin);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), autoAuthPlugin()],
+  plugins: [react(), autoAuthPlugin(), metaOriginPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
