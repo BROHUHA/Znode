@@ -207,7 +207,7 @@ export const AppShell: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden text-white select-none relative bg-[#07070a]">
+    <div className="flex h-[100dvh] w-screen overflow-hidden text-white select-none relative bg-[#07070a]">
       {/* Authentic Apple Music Frosted Liquid Glass Background (Luminous, transparent white blur matching NowPlayingScreen) */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
         {/* Layer A: Full-bleed luminous ambient wash */}
